@@ -1,0 +1,9 @@
+.cproject
+.project
+.settings
+target
+
+# emacs backup / temp files
+*~
+\#*\#
+.\#*
