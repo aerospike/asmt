@@ -99,6 +99,7 @@ typedef struct as_io_s {
 	int fd;
 	bool write;
 	void* memptr;
+	int shmid;
 	size_t segsz;
 	uLong crc32;
 } as_io_t;
@@ -133,7 +134,7 @@ static const int SHMGET_FLAGS_CREATE_ONLY = IPC_CREAT | IPC_EXCL | 0666;
 enum { MAX_BUFFER = 1024	};	// For string formatting.
 enum { NUM_BLANKS = 2		};	// For screen formatting.
 
-enum { MIN_THREADS = 1		};	// Mimum acceptable value.
+enum { MIN_THREADS = 1		};	// Minimum acceptable value.
 enum { MAX_THREADS = 1024	};	// Maximum acceptable value.
 enum { INV_THREADS = 65535	};	// Any unacceptable value.
 
@@ -148,6 +149,8 @@ enum { INV_NSID = 65535		};	// Any unacceptable value.
 enum { MIN_ARENA = 0x100	};	// Minimum acceptable value.
 enum { MAX_ARENA = 0x1FF	};	// Maximum acceptable value.
 enum { INV_ARENA = 0xffff	};	// Any unacceptable value.
+
+enum { POLL_TIME_US = 100000};	// 0.1 second, in microsecons.
 
 // General globals.
 
@@ -191,6 +194,7 @@ static bool backup_candidate_file(as_segment_t* segments, as_io_t* ios, uint32_t
 static bool backup_candidate_check_crc32(as_io_t* ios, as_segment_t* segments, uint32_t base, uint32_t n_stages);
 static void backup_candidate_cleanup(as_segment_t* segments, as_io_t* ios, uint32_t base, uint32_t idx, uint32_t step, bool remove_files);
 static bool start_io(as_io_t* ios, uint32_t n_ios);
+static void* run_poll(void* args);
 static void* run_io(void* args);
 static bool pwrite_file(int fd, const void* buf, size_t size, uLong* crc);
 static bool pread_file(int fd, void* buf, size_t size, uLong* crc);
@@ -1152,7 +1156,7 @@ backup_candidate_file(as_segment_t* segments, as_io_t* ios,
 
 	if (memptr == (void*)-1) {
 		if (g_verbose) {
-			printf("Could not attach base segment %08x"
+			printf("Could not attach segment %08x"
 					": error was %d: %s.\n", segment->key,
 					errno, strerror(errno));
 		}
@@ -1168,6 +1172,7 @@ backup_candidate_file(as_segment_t* segments, as_io_t* ios,
 
 	io->write = true;
 	io->memptr = memptr;
+	io->shmid = segment->shmid;
 	io->segsz = segment->segsz;
 	io->crc32 = g_crc32_init;
 
@@ -1320,13 +1325,23 @@ start_io(as_io_t* ios, uint32_t n_ios)
 
 	// Thread table.
 
-	pthread_t threads[n_threads];
+	pthread_t threads[n_threads + 1];
 
-	// Actually start threads.
+	// Start polling thread.
+
+	int rc = pthread_create(&threads[0], NULL, run_poll, NULL);
+
+	// If creating thread failed, don't start I/O threads.
+
+	if (rc != 0) {
+		return false;
+	}
+
+	// Start I/O threads.
 
 	uint32_t i;
-	for (i = 0; i < n_threads; i++) {
-		int rc = pthread_create(&threads[i], NULL, run_io, NULL);
+	for (i = 1; i < n_threads + 1; i++) {
+		rc = pthread_create(&threads[i], NULL, run_io, NULL);
 
 		// If creating thread failed, notify successfully created threads
 		// to end and wait.
@@ -1343,15 +1358,89 @@ start_io(as_io_t* ios, uint32_t n_ios)
 		}
 	}
 
-	// Wait for all threads to exit.
+	// Wait for all I/O threads to exit.
 
-	for (uint32_t j = 0; j < i; j++) {
+	for (uint32_t j = 1; j < i; j++) {
 		pthread_join(threads[j], NULL);
 	}
 
+	// Tell polling thread to stop. (May have stopped already
+	// e.g., if some I/O threads were not created.)
+
+	pthread_mutex_lock(&g_io_mutex);
+	bool success = g_ios_ok; // Did all I/O threads succeed?
+	g_ios_ok = false;
+	pthread_mutex_unlock(&g_io_mutex);
+
+	// Wait for polling thread to exit.
+
+	pthread_join(threads[0], NULL);
+
 	// Return success or failure.
 
-	return g_ios_ok;
+	return success;
+}
+
+// Poll for other users (e.g., Aerospike database) attaching to segments.
+
+static void*
+run_poll(void* args)
+{
+	(void)args;
+
+	uint32_t n_ios = g_n_ios;
+	as_io_t* ios = g_ios;
+
+	while (true) {
+		pthread_mutex_lock(&g_io_mutex);
+		bool ok = g_ios_ok;
+		pthread_mutex_unlock(&g_io_mutex);
+
+		if (! ok) {
+			// Have we been told to stop?
+			break;
+		}
+
+		// Check each shared memory segment to see if anyone has attached to it.
+
+		for (uint32_t i = 0; i < n_ios; i++) {
+			struct shmid_ds ds;
+
+			int rc = shmctl(ios[i].shmid, SHM_STAT, &ds);
+
+			if (rc == -1) {
+				if (g_verbose) {
+					printf("Could not stat segment with shmid %d.\n",
+							ios[i].shmid);
+				}
+				continue;
+			}
+
+			// If any other attachers, emergency exit!
+
+			if (ds.shm_nattch > 1) {
+
+				// Signal other threads out of politeness...
+
+				pthread_mutex_lock(&g_io_mutex);
+				g_ios_ok = false;
+				pthread_mutex_unlock(&g_io_mutex);
+
+				printf("EMERGENCY: Fouund attached segments"
+						": Aerospike database may be running!\n");
+
+				// Terminate whole program, including all other threads.
+
+				exit(EXIT_FAILURE);
+			}
+		}
+
+		// Wait 0.1 second and try again.
+
+		usleep(POLL_TIME_US);
+	}
+
+	return NULL;
 }
 
 // Process individual file I/O requests by individual threads.
@@ -1860,6 +1949,7 @@ restore_candidate_segment(as_file_t* files, as_io_t* ios, int* shmids,
 
 	io->write = false;
 	io->memptr = memptr;
+	io->shmid = *shmidp;
 	io->segsz = file->segsz;
 	io->crc32 = g_crc32_init;
 
