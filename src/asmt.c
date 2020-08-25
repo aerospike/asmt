@@ -37,6 +37,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 #include <zlib.h>
 
@@ -170,6 +171,10 @@ static bool g_ios_ok;
 static pthread_mutex_t g_io_mutex;
 static uint32_t g_n_ios;
 static uint32_t g_next_io;
+static uint64_t g_total_to_transfer;
+static uint64_t g_total_transferred;
+static uint32_t g_decile_transferred;
+static struct timespec g_io_start_time;
 
 
 //==========================================================
@@ -206,6 +211,7 @@ static bool list_files(as_file_t** files, uint32_t* n_files, int* error);
 static int qsort_compare_files(const void* left, const void* right);
 static void draw_table(char** table, uint32_t n_rows, uint32_t n_cols);
 static char* strfmt_width(char* string, uint32_t width, bool dashes);
+static const char* strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile);
 
 
 //==========================================================
@@ -1127,7 +1133,7 @@ backup_candidate(as_segment_t* segments, uint32_t base, uint32_t n_stages)
 	if (g_verbose) {
 		as_segment_t* sp = &segments[base];
 
-		printf("%s", success ? "Successfully backed up" : "Failed to back up");
+		printf("%s", success ? "\nSuccessfully backed up" : "\nFailed to back up");
 		printf(" %u Aerospike database segments", n_stages + 2);
 		printf(" for instance %u, namespace %u.\n", sp->inst, sp->nsid);
 	}
@@ -1314,6 +1320,26 @@ start_io(as_io_t* ios, uint32_t n_ios)
 	g_next_io = 0;
 	g_ios_ok = true;
 
+	// How much data will be transferred (total)?
+
+	g_total_to_transfer = 0;
+	for (uint32_t i = 0; i < g_n_ios; i++) {
+		g_total_to_transfer += (uint64_t)ios[i].segsz;
+	}
+	g_total_transferred = 0;
+	g_decile_transferred = 0;
+
+	// Remember start time.
+
+	int rc = clock_gettime(CLOCK_MONOTONIC, &g_io_start_time);
+	
+	if (rc != 0) {
+		if (g_verbose) {
+			printf("Could not determine I/O start time.\n");
+		}
+		return false;
+	}
+
 	// Initialize global mutex.
 
 	pthread_mutex_init(&g_io_mutex, NULL);
@@ -1326,7 +1352,7 @@ start_io(as_io_t* ios, uint32_t n_ios)
 
 	uint32_t i;
 	for (i = 0; i < n_threads; i++) {
-		int rc = pthread_create(&threads[i], NULL, run_io, NULL);
+		rc = pthread_create(&threads[i], NULL, run_io, NULL);
 
 		// If creating thread failed, notify successfully created threads
 		// to end and wait.
@@ -1347,6 +1373,24 @@ start_io(as_io_t* ios, uint32_t n_ios)
 
 	for (uint32_t j = 0; j < i; j++) {
 		pthread_join(threads[j], NULL);
+	}
+
+	struct timespec io_end_time;
+
+	rc = clock_gettime(CLOCK_MONOTONIC, &io_end_time);
+	
+	if (rc != 0) {
+		if (g_verbose) {
+			printf("Could not determine I/O end time.\n");
+		}
+	}
+	else {
+		if (g_verbose && g_decile_transferred != 10) {
+			printf("Total I/O time was %s.\n",
+					strtime_diff_eta(&g_io_start_time,
+									 &io_end_time,
+									 g_decile_transferred));
+		}
 	}
 
 	// Return success or failure.
@@ -1412,6 +1456,46 @@ run_io(void* args)
 			pthread_mutex_unlock(&g_io_mutex);
 
 			break;
+		}
+		else {
+			
+			pthread_mutex_lock(&g_io_mutex);
+
+			g_total_transferred += io->segsz;
+
+			// if we've reached a notable decile point, notify the user.
+			// Note: This is the only point at which output is done under
+			// a mutex, so it isn't stepped on by other threads.
+
+			if (g_verbose) {
+
+				uint32_t decile_transferred = (uint32_t)
+					((g_total_transferred * 10UL)/g_total_to_transfer);
+
+				if (g_decile_transferred != decile_transferred) {
+
+					g_decile_transferred = decile_transferred;
+
+					printf("Transferred %3d%% of data",
+							g_decile_transferred * 10);
+
+					struct timespec io_end_time;
+
+					int rc = clock_gettime(CLOCK_MONOTONIC, &io_end_time);
+	
+					if (rc != 0) {
+						printf(".\n");
+					}
+					else {
+						printf(" in %s.\n",
+								strtime_diff_eta(&g_io_start_time,
+												 &io_end_time,
+												 g_decile_transferred));
+					}
+				}
+			}
+
+			pthread_mutex_unlock(&g_io_mutex);
 		}
 	}
 
@@ -1794,7 +1878,7 @@ restore_candidate(as_file_t* files, uint32_t base, uint32_t n_stages)
 	if (g_verbose) {
 		as_file_t* fp = &files[base];
 
-		printf("%s", success ? "Successfully restored" : "Failed to restore");
+		printf("%s", success ? "\nSuccessfully restored" : "\nFailed to restore");
 		printf(" %u Aerospike database segment files", n_stages + 2);
 		printf(" for instance %u, namespace %u.\n", fp->inst, fp->nsid);
 	}
@@ -2323,5 +2407,122 @@ strfmt_width(char* string, uint32_t width, bool dashes)
 	buffer[width] = '\0';
 
 	return buffer;
+}
+
+#define ONE_BILLION 1000000000
+
+static const char*
+strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile)
+{
+	static char outbuff[256];
+
+	// Rationalize start and end.
+
+	while (end->tv_nsec < start->tv_nsec) {
+		end->tv_nsec += ONE_BILLION;
+		end->tv_sec--;
+	}
+
+	// Compute diff.
+
+	struct timespec diff;
+
+	diff.tv_sec = end->tv_sec - start->tv_sec;
+	diff.tv_nsec = end->tv_nsec - start->tv_nsec;
+
+	// Rationalize diff.
+
+	while (diff.tv_nsec > ONE_BILLION) {
+		diff.tv_nsec -= ONE_BILLION;
+		diff.tv_sec++;
+	}
+
+	// Format diff as printable string.
+
+	time_t hours;
+	time_t minutes;
+	time_t seconds;
+	time_t tenths;
+
+	hours = diff.tv_sec / 3600;
+	diff.tv_sec -= hours * 3600;
+
+	minutes = diff.tv_sec / 60;
+	diff.tv_sec -= minutes * 60;
+
+	seconds = diff.tv_sec;
+
+	tenths = diff.tv_nsec / (ONE_BILLION / 10);
+
+	if (hours < 0 || minutes < 0 || seconds < 0 || tenths < 0) {
+		sprintf(outbuff, "<null>");
+		return outbuff;
+	}
+
+	int32_t len;
+
+	if (hours != 0) {
+		len = sprintf(outbuff, "%ldh:%ldm:%ld.%lds", hours, minutes, seconds, tenths);
+	}
+	else if (minutes != 0) {
+		len = sprintf(outbuff, "%ldm:%ld.%lds", minutes, seconds, tenths);
+	}
+	else {
+		len = sprintf(outbuff, "%ld.%lds", seconds, tenths);
+	}
+
+	if (decile < 1 || decile >= 10) {
+		return outbuff;
+	}
+
+	char* outptr = (char*)outbuff + len;
+
+	if (len != 0) {
+		*outptr++ = ' ';
+		*outptr = '\0';
+	}
+
+	// Compute ETA, given diff and decile.
+
+	struct timespec eta = diff;
+
+	eta.tv_sec = (time_t)(10.0 / (double)decile * (double)diff.tv_sec);
+	eta.tv_nsec = (time_t)(10.0 / (double)decile * (double)diff.tv_nsec);
+
+	// Rationalize eta.
+
+	while (eta.tv_nsec > ONE_BILLION) {
+		eta.tv_nsec -= ONE_BILLION;
+		eta.tv_sec++;
+	}
+
+	// Format eta.
+
+	hours = eta.tv_sec / 3600;
+	eta.tv_sec -= hours * 3600;
+
+	minutes = eta.tv_sec / 60;
+	eta.tv_sec -= minutes * 60;
+
+	seconds = eta.tv_sec;
+
+	tenths = eta.tv_nsec / (ONE_BILLION / 10);
+
+	if (hours < 0 || minutes < 0 || seconds < 0 || tenths < 0) {
+		sprintf(outptr, "<null>");
+		return outbuff;
+	}
+
+	if (hours != 0) {
+		sprintf(outptr, "(ETA: %ldh:%ldm:%ld.%lds)", hours, minutes, seconds, tenths);
+	}
+	else if (minutes != 0) {
+		sprintf(outptr, "(ETA: %ldm:%ld.%lds)", minutes, seconds, tenths);
+	}
+	else {
+		sprintf(outptr, "(ETA: %ld.%lds)", seconds, tenths);
+	}
+
+	return outbuff;
 }
 
