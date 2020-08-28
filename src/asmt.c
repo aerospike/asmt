@@ -212,6 +212,8 @@ static int qsort_compare_files(const void* left, const void* right);
 static void draw_table(char** table, uint32_t n_rows, uint32_t n_cols);
 static char* strfmt_width(char* string, uint32_t width, bool dashes);
 static const char* strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile);
+static void gettime_hmst(struct timespec* time, time_t* hours, time_t* minutes, time_t* seconds, time_t* tenths);
+
 
 
 //==========================================================
@@ -230,7 +232,6 @@ main(int argc, char* argv[])
 	int opt;
 
 	while ((opt = getopt(argc, argv, "abchi:n:p:rt:v")) != -1) {
-
 		switch (opt) {
 
 		case 'a':
@@ -588,7 +589,6 @@ analyze_backup(void)
 	uint32_t n_segments;
 
 	if (! list_segments(&segments, &n_segments, &error) || n_segments == 0) {
-
 		// Note: n_segments and error are valid even if list_segments() returned false.
 
 		if (g_verbose) {
@@ -639,7 +639,6 @@ check_dir(const char* pathname, bool is_write, bool create)
 	// Does the directory exit?
 
 	if (stat(pathname, &statbuf) != 0) {
-
 		// If not and we've been asked (create is true), can we create it?
 
 		if (create) {
@@ -977,7 +976,6 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 	// Determine whether to merely analyze or actually backup.
 
 	if (g_analyze) {
-
 		// Print command to backup these segments.
 
 		printf("%s -b", g_progname);
@@ -1232,7 +1230,6 @@ backup_candidate_check_crc32(as_io_t* ios, as_segment_t* segments,
 		uint32_t base, uint32_t n_stages)
 {
 	for (uint32_t i = 0; i < n_stages + 2; i++) {
-
 		as_segment_t* segment = &segments[base + i];
 		as_io_t* io = &ios[i];
 
@@ -1256,7 +1253,6 @@ backup_candidate_cleanup(as_segment_t* segments, as_io_t* ios,
 	// Detach all attached segments.
 
 	for (uint32_t i = 0; i <= idx; i++) {
-
 		// Skip if we didn't finish shmat(2) on last segment.
 
 		if (i == idx && step == 1) {
@@ -1269,7 +1265,6 @@ backup_candidate_cleanup(as_segment_t* segments, as_io_t* ios,
 	// Close all opened files.
 
 	for (uint32_t i = 0; i <= idx; i++) {
-
 		// Skip if we didn't finish open(2) on last segment file.
 
 		if (i == idx && step == 2) {
@@ -1286,7 +1281,6 @@ backup_candidate_cleanup(as_segment_t* segments, as_io_t* ios,
 	}
 
 	for (uint32_t i = 0; i <= idx; i++) {
-
 		// Skip if we didn't finish open(2) on last segment file.
 
 		if (i == idx && step == 2) {
@@ -1406,7 +1400,6 @@ run_io(void* args)
 	(void)args;
 
 	while (true) {
-
 		// Get the next I/O request.
 
 		uint32_t next;
@@ -1448,7 +1441,6 @@ run_io(void* args)
 		// If this request failed, stop the other threads.
 
 		if (! success) {
-
 			pthread_mutex_lock(&g_io_mutex);
 
 			g_ios_ok = false;
@@ -1458,7 +1450,6 @@ run_io(void* args)
 			break;
 		}
 		else {
-
 			pthread_mutex_lock(&g_io_mutex);
 
 			g_total_transferred += io->segsz;
@@ -1473,7 +1464,6 @@ run_io(void* args)
 					((g_total_transferred * 10UL)/g_total_to_transfer);
 
 				if (g_decile_transferred != decile_transferred) {
-
 					g_decile_transferred = decile_transferred;
 
 					printf("Transferred %3d%% of data",
@@ -1522,7 +1512,6 @@ pwrite_file(int fd, const void* buf, size_t size, uLong* crc)
 	// Write chunks of segment, as large as possible.
 
 	while ((result = pwrite(fd, buf, (size_t)newsize, offset)) != newsize) {
-
 		if (result < 0) {
 			return false;
 		}
@@ -1576,7 +1565,6 @@ pread_file(int fd, void* buf, size_t size, uLong* crc)
 	// Read chunks of segment, as large as possible.
 
 	while ((result = pread(fd, buf, (size_t)newsize, offset)) != newsize) {
-
 		if (result < 0) {
 			return false;
 		}
@@ -1635,7 +1623,6 @@ analyze_restore(void)
 	uint32_t n_files;
 
 	if (! list_files(&files, &n_files, &error) || n_files == 0) {
-
 		// Note: n_files and error are valid even if list_files() returned false.
 
 		if (g_verbose) {
@@ -1741,7 +1728,6 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base)
 	// Determine whether to analyze or actually restore.
 
 	if (g_analyze) {
-
 		// Print command to restore these segment files.
 
 		printf("%s -r", g_progname);
@@ -1759,7 +1745,6 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base)
 		return true;
 	}
 	else {
-
 		// Actually perform restores...
 
 		return restore_candidate(files, base, n_stages);
@@ -1926,7 +1911,6 @@ restore_candidate_segment(as_file_t* files, as_io_t* ios, int* shmids,
 	// Can not operate on segments that are in use.
 
 	if (memptr == (void*)-1) {
-
 		if (g_verbose) {
 			printf("Could not attach segment %08x"
 					": error was %d: %s.\n", file->key,
@@ -2051,7 +2035,6 @@ restore_candidate_cleanup(int* shmids, as_io_t* ios, uint32_t idx,
 	// Detach all attached segments.
 
 	for (uint32_t i = 0; i <= idx; i++) {
-
 		// Skip if didn't finish shmat(2) on last segment.
 
 		if (i == idx && step <= 2) {
@@ -2066,7 +2049,6 @@ restore_candidate_cleanup(int* shmids, as_io_t* ios, uint32_t idx,
 	// Close all opened files.
 
 	for (uint32_t i = 0; i <= idx; i++) {
-
 		// Skip if didn't finish open(2) on last segment.
 
 		if (i == idx && step <= 3) {
@@ -2238,7 +2220,6 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 	struct dirent* dirent;
 
 	while ((dirent = readdir(dir)) != NULL) {
-
 		// Skip "." and ".." entries.
 
 		if (strcmp(dirent->d_name, ".") == 0 ||
@@ -2415,6 +2396,7 @@ static const char*
 strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile)
 {
 	static char outbuff[256];
+	char* outptr = outbuff;
 
 	// Rationalize start and end.
 
@@ -2430,13 +2412,6 @@ strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile)
 	diff.tv_sec = end->tv_sec - start->tv_sec;
 	diff.tv_nsec = end->tv_nsec - start->tv_nsec;
 
-	// Rationalize diff.
-
-	while (diff.tv_nsec > ONE_BILLION) {
-		diff.tv_nsec -= ONE_BILLION;
-		diff.tv_sec++;
-	}
-
 	// Format diff as printable string.
 
 	time_t hours;
@@ -2444,43 +2419,31 @@ strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile)
 	time_t seconds;
 	time_t tenths;
 
-	hours = diff.tv_sec / 3600;
-	diff.tv_sec -= hours * 3600;
-
-	minutes = diff.tv_sec / 60;
-	diff.tv_sec -= minutes * 60;
-
-	seconds = diff.tv_sec;
-
-	tenths = diff.tv_nsec / (ONE_BILLION / 10);
+	gettime_hmst(&diff, &hours, &minutes, &seconds, &tenths);
 
 	if (hours < 0 || minutes < 0 || seconds < 0 || tenths < 0) {
-		sprintf(outbuff, "<null>");
+		sprintf(outptr, "<null>");
 		return outbuff;
 	}
 
-	int32_t len;
-
 	if (hours != 0) {
-		len = sprintf(outbuff, "%ldh:%ldm:%ld.%lds", hours, minutes, seconds, tenths);
+		outptr += sprintf(outptr, "%ldh:%ldm:%ld.%lds", hours, minutes, seconds, tenths);
 	}
 	else if (minutes != 0) {
-		len = sprintf(outbuff, "%ldm:%ld.%lds", minutes, seconds, tenths);
+		outptr += sprintf(outptr, "%ldm:%ld.%lds", minutes, seconds, tenths);
 	}
 	else {
-		len = sprintf(outbuff, "%ld.%lds", seconds, tenths);
+		outptr += sprintf(outptr, "%ld.%lds", seconds, tenths);
 	}
 
 	if (decile < 1 || decile >= 10) {
 		return outbuff;
 	}
 
-	char* outptr = (char*)outbuff + len;
+	// Add the ETA.
 
-	if (len != 0) {
-		*outptr++ = ' ';
-		*outptr = '\0';
-	}
+	*outptr++ = ' ';
+	*outptr = '\0';
 
 	// Compute ETA, given diff and decile.
 
@@ -2489,24 +2452,7 @@ strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile)
 	eta.tv_sec = (time_t)(10.0 / (double)decile * (double)diff.tv_sec);
 	eta.tv_nsec = (time_t)(10.0 / (double)decile * (double)diff.tv_nsec);
 
-	// Rationalize eta.
-
-	while (eta.tv_nsec > ONE_BILLION) {
-		eta.tv_nsec -= ONE_BILLION;
-		eta.tv_sec++;
-	}
-
-	// Format eta.
-
-	hours = eta.tv_sec / 3600;
-	eta.tv_sec -= hours * 3600;
-
-	minutes = eta.tv_sec / 60;
-	eta.tv_sec -= minutes * 60;
-
-	seconds = eta.tv_sec;
-
-	tenths = eta.tv_nsec / (ONE_BILLION / 10);
+	gettime_hmst(&eta, &hours, &minutes, &seconds, &tenths);
 
 	if (hours < 0 || minutes < 0 || seconds < 0 || tenths < 0) {
 		sprintf(outptr, "<null>");
@@ -2524,4 +2470,26 @@ strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile)
 	}
 
 	return outbuff;
+}
+
+static void
+gettime_hmst(struct timespec* time, time_t* hours, time_t* minutes,
+		time_t* seconds, time_t* tenths)
+{
+	while (time->tv_nsec > ONE_BILLION) {
+		time->tv_nsec -= ONE_BILLION;
+		time->tv_sec++;
+	}
+
+	// Extract hours, minutes, seconds, and tenths.
+
+	*hours = time->tv_sec / 3600;
+	time->tv_sec -= *hours * 3600;
+
+	*minutes = time->tv_sec / 60;
+	time->tv_sec -= *minutes * 60;
+
+	*seconds = time->tv_sec;
+
+	*tenths = time->tv_nsec / (ONE_BILLION / 10);
 }
