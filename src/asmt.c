@@ -1332,7 +1332,7 @@ start_io(as_io_t* ios, uint32_t n_ios)
 	// Remember start time.
 
 	int rc = clock_gettime(CLOCK_MONOTONIC, &g_io_start_time);
-	
+
 	if (rc != 0) {
 		if (g_verbose) {
 			printf("Could not determine I/O start time.\n");
@@ -1378,7 +1378,7 @@ start_io(as_io_t* ios, uint32_t n_ios)
 	struct timespec io_end_time;
 
 	rc = clock_gettime(CLOCK_MONOTONIC, &io_end_time);
-	
+
 	if (rc != 0) {
 		if (g_verbose) {
 			printf("Could not determine I/O end time.\n");
@@ -1458,7 +1458,7 @@ run_io(void* args)
 			break;
 		}
 		else {
-			
+
 			pthread_mutex_lock(&g_io_mutex);
 
 			g_total_transferred += io->segsz;
@@ -1482,7 +1482,7 @@ run_io(void* args)
 					struct timespec io_end_time;
 
 					int rc = clock_gettime(CLOCK_MONOTONIC, &io_end_time);
-	
+
 					if (rc != 0) {
 						printf(".\n");
 					}
@@ -2525,4 +2525,3 @@ strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile)
 
 	return outbuff;
 }
-
