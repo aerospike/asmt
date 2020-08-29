@@ -950,6 +950,9 @@ stat_segment(int shmid, as_segment_t** segment, int* error)
 
 		if (memptr == (void*)-1) {
 			*error = errno;
+			if (sp->nsnm != NULL) {
+				free(sp->nsnm);
+			}
 			free(*segment);
 			return false;
 		}
@@ -1681,7 +1684,7 @@ pread_file(int fd, void* buf, size_t size, uLong* crc)
 static bool
 analyze_restore(void)
 {
-	as_file_t* files;
+	as_file_t* files = NULL;
 	int error;
 
 	// First, see if we can access the backup directory for reading.
@@ -1717,6 +1720,20 @@ analyze_restore(void)
 			printf(".\n");
 		}
 
+		if (n_files > 0) {
+			for (uint32_t j = 0; j < n_files; j++) {
+				as_file_t* fp = &files[j];
+
+				if (fp->type == TYPE_BASE && fp->nsnm != NULL) {
+					free(fp->nsnm);
+				}
+			}
+
+			if (files != NULL) {
+				free(files);
+			}
+		}
+
 		return false;
 	}
 
@@ -1731,28 +1748,39 @@ analyze_restore(void)
 
 		if (file->type == TYPE_BASE) {
 			candidates = true;
+
 			if (! analyze_restore_candidate(files, n_files, i)) {
+
 				for (uint32_t j = 0; j < n_files; j++) {
 					as_file_t* fp = &files[j];
+
 					if (fp->type == TYPE_BASE && fp->nsnm != NULL) {
 						free(fp->nsnm);
 					}
 				}
-				free(files);
+
+				if (files != NULL) {
+					free(files);
+				}
+
 				return false;
 			}
 		}
 	}
 
 	if (! candidates) {
+
 		if (g_verbose) {
+
 			printf("\nDid not find any Aerospike database segment files");
 			if (g_inst != INV_INST) {
 				printf(", instance %u", g_inst);
 			}
+
 			if (g_nsnm != NULL) {
 				printf(", namespace \'%s\'", g_nsnm);
 			}
+
 			printf(".\n");
 		}
 	}
@@ -1761,12 +1789,15 @@ analyze_restore(void)
 
 	for (uint32_t j = 0; j < n_files; j++) {
 		as_file_t* fp = &files[j];
+
 		if (fp->type == TYPE_BASE && fp->nsnm != NULL) {
 			free(fp->nsnm);
 		}
 	}
 
-	free(files);
+	if (files != NULL) {
+		free(files);
+	}
 
 	return true;
 }
