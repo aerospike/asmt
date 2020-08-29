@@ -620,6 +620,12 @@ analyze_backup(void)
 			candidates = true;
 
 			if (! analyze_backup_candidate(segments, n_segments, i)) {
+				for (uint32_t j = 0; j < n_segments; j++) {
+					as_segment_t* sp = &segments[j];
+					if (sp->type == TYPE_BASE && sp->nsnm != NULL) {
+						free(sp->nsnm);
+					}
+				}
 				free(segments);
 				return false;
 			}
@@ -637,6 +643,12 @@ analyze_backup(void)
 		}
 	}
 
+	for (uint32_t j = 0; j < n_segments; j++) {
+		as_segment_t* sp = &segments[j];
+		if (sp->type == TYPE_BASE && sp->nsnm != NULL) {
+			free(sp->nsnm);
+		}
+	}
 	free(segments);
 
 	return true;
@@ -1720,6 +1732,12 @@ analyze_restore(void)
 		if (file->type == TYPE_BASE) {
 			candidates = true;
 			if (! analyze_restore_candidate(files, n_files, i)) {
+				for (uint32_t j = 0; j < n_files; j++) {
+					as_file_t* fp = &files[j];
+					if (fp->type == TYPE_BASE && fp->nsnm != NULL) {
+						free(fp->nsnm);
+					}
+				}
 				free(files);
 				return false;
 			}
@@ -1740,6 +1758,13 @@ analyze_restore(void)
 	}
 
 	// Free table created by list_files().
+
+	for (uint32_t j = 0; j < n_files; j++) {
+		as_file_t* fp = &files[j];
+		if (fp->type == TYPE_BASE && fp->nsnm != NULL) {
+			free(fp->nsnm);
+		}
+	}
 
 	free(files);
 
