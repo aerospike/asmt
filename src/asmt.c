@@ -76,6 +76,7 @@ typedef struct as_segment_s {
 	uint32_t stage;
 	uint32_t inst;
 	uint32_t nsid;
+	char* nsnm;
 	as_type type;
 	uLong crc32;
 } as_segment_t;
@@ -91,6 +92,7 @@ typedef struct as_file_s {
 	uint32_t stage;
 	uint32_t inst;
 	uint32_t nsid;
+	char* nsnm;
 	as_type type;
 } as_file_t;
 
@@ -112,7 +114,7 @@ typedef struct as_io_s {
 // Constant globals.
 
 static const char g_fullname[] =	"Aerospike Shared Memory Tool";
-static const char g_version[] =		"Version 1.0";
+static const char g_version[] =		"Version 1.1";
 static const char g_copyright[] =	"Copyright (C) 2020 Aerospike, Inc.";
 static const char g_all_rights[] =	"All rights reserved.";
 
@@ -144,18 +146,20 @@ enum { INV_INST = 65535		};	// Any unacceptable value.
 
 enum { MIN_NSID = 1			};	// Minimum acceptable value.
 enum { MAX_NSID = 32		};	// Maximum acceptable value.
-enum { INV_NSID = 65535		};	// Any unacceptable value.
 
 enum { MIN_ARENA = 0x100	};	// Minimum acceptable value.
 enum { MAX_ARENA = 0x1FF	};	// Maximum acceptable value.
 enum { INV_ARENA = 0xffff	};	// Any unacceptable value.
 
+enum { NAMESPACE_OFF = 1024};	// Offset of namespace in base segment.
+enum { NAMESPACE_LEN = 32};		// Length of namespace name.
+
 // General globals.
 
 static char* g_pathdir = NULL;
 static char* g_progname = NULL;
+static char* g_nsnm = NULL;
 static uint32_t g_inst = 0; // Default is instance 0.
-static uint32_t g_nsid = INV_NSID; // Default is any namespace.
 static bool g_analyze = false;
 static bool g_backup = false;
 static bool g_crc32 = false;
@@ -187,7 +191,7 @@ static bool analyze(void);
 static bool analyze_backup(void);
 static bool check_dir(const char* pathname, bool is_write, bool create);
 static bool list_segments(as_segment_t** segments, uint32_t* n_segments, int* error);
-static bool stat_segment(as_segment_t** segment, int shmid, int* error);
+static bool stat_segment(int shmid, as_segment_t** segment, int* error);
 static int qsort_compare_segments(const void* left, const void* right);
 static bool analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments, uint32_t base);
 static void display_segments(as_segment_t* segments, uint32_t base, uint32_t n_stages);
@@ -210,7 +214,7 @@ static bool validate_file_name(const char* pathname, as_file_t* file);
 static bool list_files(as_file_t** files, uint32_t* n_files, int* error);
 static int qsort_compare_files(const void* left, const void* right);
 static void draw_table(char** table, uint32_t n_rows, uint32_t n_cols);
-static char* strfmt_width(char* string, uint32_t width, bool dashes);
+static char* strfmt_width(char* string, uint32_t width, uint32_t n_blanks, bool dashes);
 static const char* strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile);
 static void gettime_hmst(struct timespec* time, time_t* hours, time_t* minutes, time_t* seconds, time_t* tenths);
 
@@ -261,8 +265,8 @@ main(int argc, char* argv[])
 			break;
 
 		case 'n':
-			// Filter by namespace ID (default is any).
-			g_nsid = (uint32_t)atoi(optarg);
+			// Filter by namespace name (default is any).
+			g_nsnm = optarg;
 			break;
 
 		case 'p':
@@ -333,16 +337,6 @@ main(int argc, char* argv[])
 	if (g_inst != INV_INST && g_inst > MAX_INST) {
 		printf("Instance must be from %d..%d (use '-i').\n\n",
 				MIN_INST, MAX_INST);
-		usage(false);
-		exit(EXIT_FAILURE);
-	}
-
-	// Can't specify a namespace ID outside the valid range.
-	// Note: Namespace ID cannot be 0.
-
-	if (g_nsid != INV_NSID && (g_nsid < MIN_NSID || g_nsid > MAX_NSID)) {
-		printf("Namespace ID must be from %d..%d (use '-n').\n\n",
-				MIN_NSID, MAX_NSID);
 		usage(false);
 		exit(EXIT_FAILURE);
 	}
@@ -450,7 +444,7 @@ usage(bool verbose)
 	printf(" [-c]");
 	printf(" [-h]");
 	printf(" [-i <instance>]");
-	printf(" [-n <namespace-ID>]");
+	printf(" [-n <name>]");
 
 	print_newline_and_blanks(first_len);
 
@@ -466,7 +460,7 @@ usage(bool verbose)
 	printf("-c compare crc32 values of segments and segment files\n");
 	printf("-h help\n");
 	printf("-i filter by instance (default is instance 0)\n");
-	printf("-n filter by namespace ID (default is all namespaces)\n");
+	printf("-n filter by namespace name (default is all namespaces)\n");
 	printf("-p path of directory (mandatory)\n");
 	printf("-r restore (operation or advisory with '-a')\n");
 	printf("-t maximum number of threads for I/O (default is #CPUs,"
@@ -528,14 +522,14 @@ usage(bool verbose)
 
 	printf("\n");
 
-	sprintf(buffer, "%s -r -i3 -n2 -p /home/aerospike/backups -cv -t 128",
+	sprintf(buffer, "%s -r -i3 -n bar -p /home/aerospike/backups -cv -t 128",
 			g_progname);
 	printf("%s\n", buffer);
 
 	printf("\n");
 
 	printf("    Restores all Aerospike database segment files with instance 3\n");
-	printf("    (namespace 2) from the directory /home/aerospike/backups.\n");
+	printf("    (namespace \'bar\') from the directory /home/aerospike/backups.\n");
 	printf("    Requests that crc32 checks be made on all restorations.\n");
 	printf("    Requests verbose output. Uses no more than 128 threads\n");
 	printf("    for file I/O.\n");
@@ -577,9 +571,16 @@ analyze_backup(void)
 
 	if (! check_dir(g_pathdir, true, ! g_analyze)) {
 		if (g_verbose) {
-			printf("Cannot write to directory \"%s\"", g_pathdir);
-			printf(": either it doesn't exist"
-					" or we don't have write permission.\n");
+			printf("Cannot write to directory \'%s\'", g_pathdir);
+			if (g_analyze) {
+				printf(": either it doesn't exist,"
+						" we don't have write permission,"
+						" or we're running with \'-a\'.\n");
+			}
+			else {
+				printf(": either it doesn't exist"
+						" or we don't have write permission.\n");
+			}
 		}
 		return false;
 	}
@@ -592,10 +593,10 @@ analyze_backup(void)
 		// Note: n_segments and error are valid even if list_segments() returned false.
 
 		if (g_verbose) {
-			printf("Did not find any unattached Aerospike database segments");
+			printf("\nDid not find any unattached Aerospike database segments");
 			printf(", instance %u", g_inst);
-			if (g_nsid != INV_NSID) {
-				printf(", namespace %u", g_nsid);
+			if (g_nsnm != NULL) {
+				printf(", namespace \'%s\'", g_nsnm);
 			}
 			if (error != 0) {
 				printf(": error was %d: %s", error, strerror(error));
@@ -610,14 +611,29 @@ analyze_backup(void)
 	// Must have one base and treex segment and and one or more stage segments.
 	// Will handle multiple namespaces if requested and no failures.
 
+	bool candidates = false;
+
 	for (uint32_t i = 0; i < n_segments; i++) {
 		as_segment_t* segment = &segments[i];
 
 		if (segment->type == TYPE_BASE) {
+			candidates = true;
+
 			if (! analyze_backup_candidate(segments, n_segments, i)) {
 				free(segments);
 				return false;
 			}
+		}
+	}
+
+	if (! candidates) {
+		if (g_verbose) {
+			printf("\nDid not find any unattached Aerospike database segments");
+			printf(", instance %u", g_inst);
+			if (g_nsnm != NULL) {
+				printf(", namespace \'%s\'", g_nsnm);
+			}
+			printf(".\n");
 		}
 	}
 
@@ -646,7 +662,7 @@ check_dir(const char* pathname, bool is_write, bool create)
 				return false;
 			}
 			if (g_verbose) {
-				printf("\nCreated backup directory \"%s\".\n", pathname);
+				printf("\nCreated backup directory \'%s\'.\n", pathname);
 			}
 		}
 		else {
@@ -719,23 +735,44 @@ list_segments(as_segment_t** segments, uint32_t* n_segments, int* error)
 	for (int i = 0; i <= max_shmid; i++) {
 		as_segment_t* segment;
 
-		if (! stat_segment(&segment, i, error)) {
+		// Get informationabout segment.
+
+		if (! stat_segment(i, &segment, error)) {
 			continue;
 		}
 
 		// Skip attached segments.
 
 		if (segment->natt != 0) {
+			if(segment->nsnm != NULL) {
+				free(segment->nsnm);
+			}
 			free(segment);
 			continue;
 		}
 
 		// Filter out uninteresting segments.
 
-		if ((g_inst != INV_INST && segment->inst != g_inst) ||
-				(g_nsid != INV_NSID && segment->nsid != g_nsid)) {
+		if (g_inst != INV_INST && segment->inst != g_inst) {
+			if(segment->nsnm != NULL) {
+				free(segment->nsnm);
+			}
 			free(segment);
 			continue;
+		}
+
+		// Check whether the namespace name is a match.
+
+		if (segment->type == TYPE_BASE && g_nsnm != NULL) {
+			if (segment->nsnm == NULL) {
+				free(segment);
+				continue;
+			}
+			else if (strcmp(segment->nsnm, g_nsnm) != 0) {
+				free(segment->nsnm);
+				free(segment);
+				continue;
+			}
 		}
 
 		// Found a valid, unattached Aerospike database segment; append it to table.
@@ -747,6 +784,8 @@ list_segments(as_segment_t** segments, uint32_t* n_segments, int* error)
 		assert(*segments != NULL);
 
 		memcpy(*segments + *n_segments - 1, segment, sizeof(as_segment_t));
+
+		// Do not free segment->nsnm: It is still in use!
 
 		free(segment);
 	}
@@ -765,7 +804,7 @@ list_segments(as_segment_t** segments, uint32_t* n_segments, int* error)
 // Validates whether a segment is an Aerospike database segment.
 
 static bool
-stat_segment(as_segment_t** segment, int shmid, int* error)
+stat_segment(int shmid, as_segment_t** segment, int* error)
 {
 	// Get info on shared memory segment with ID of shmid.
 
@@ -867,6 +906,31 @@ stat_segment(as_segment_t** segment, int shmid, int* error)
 		return false;
 	}
 
+	// Get namespace of segment.
+
+	if (sp->type == TYPE_BASE) {
+		void* memptr = shmat(sp->shmid, NULL, SHM_RDONLY);
+
+		if (memptr == (void*)-1) {
+			*error = errno;
+			free(*segment);
+			return false;
+		}
+
+		char nsnm[NAMESPACE_LEN + 1];
+
+		memcpy(nsnm, memptr + NAMESPACE_OFF, NAMESPACE_LEN);
+
+		nsnm[NAMESPACE_LEN] = '\0';
+
+		shmdt(memptr);
+
+		sp->nsnm = strdup(nsnm);
+	}
+	else {
+		sp->nsnm = NULL;
+	}
+
 	// If g_crc32 option is selected, compute crc32.
 
 	if (g_crc32) {
@@ -874,22 +938,13 @@ stat_segment(as_segment_t** segment, int shmid, int* error)
 
 		if (memptr == (void*)-1) {
 			*error = errno;
-
-			if (g_verbose) {
-				printf("Could not attach segment %08x"
-						": error was %d: %s.\n", sp->key,
-						errno, strerror(errno));
-			}
-
 			free(*segment);
-
 			return false;
 		}
-		else {
-			sp->crc32 = crc32(g_crc32_init, memptr, (uInt)sp->segsz);
 
-			shmdt(memptr);
-		}
+		sp->crc32 = crc32(g_crc32_init, memptr, (uInt)sp->segsz);
+
+		shmdt(memptr);
 	}
 	else {
 		sp->crc32 = g_crc32_init;
@@ -1003,7 +1058,7 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 static void
 display_segments(as_segment_t* segments, uint32_t base, uint32_t n_stages)
 {
-	char* table[n_stages + 3][g_crc32 ? 12 : 11];
+	char* table[n_stages + 3][g_crc32 ? 13 : 12];
 
 	// Fill in table header.
 
@@ -1016,10 +1071,11 @@ display_segments(as_segment_t* segments, uint32_t base, uint32_t n_stages)
 	table[0][6] = strdup("segsz");
 	table[0][7] = strdup("inst");
 	table[0][8] = strdup("nsid");
-	table[0][9] = strdup("type");
-	table[0][10] = strdup("stage");
+	table[0][9] = strdup("name");
+	table[0][10] = strdup("type");
+	table[0][11] = strdup("stage");
 	if (g_crc32) {
-		table[0][11] = strdup("crc32");
+		table[0][12] = strdup("crc32");
 	}
 
 	char buffer[MAX_BUFFER];
@@ -1063,6 +1119,15 @@ display_segments(as_segment_t* segments, uint32_t base, uint32_t n_stages)
 		sprintf(buffer,"%u", segment->nsid);
 		table[i + 1][8] = strdup(buffer);
 
+		if (segment->type == TYPE_BASE) {
+			sprintf(buffer, "%s",
+					segment->nsnm == NULL ? "<null>" : segment->nsnm);
+		}
+		else {
+			sprintf(buffer,"-");
+		}
+		table[i + 1][9] = strdup(buffer);
+
 		switch(segment->type) {
 		case TYPE_BASE:
 			sprintf(buffer,"base");
@@ -1074,7 +1139,7 @@ display_segments(as_segment_t* segments, uint32_t base, uint32_t n_stages)
 			sprintf(buffer,"stage");
 			break;
 		}
-		table[i + 1][9] = strdup(buffer);
+		table[i + 1][10] = strdup(buffer);
 
 		if (segment->type == TYPE_STAGE) {
 			sprintf(buffer, "%03x", segment->stage);
@@ -1082,17 +1147,17 @@ display_segments(as_segment_t* segments, uint32_t base, uint32_t n_stages)
 		else {
 			sprintf(buffer,"-");
 		}
-		table[i + 1][10] = strdup(buffer);
+		table[i + 1][11] = strdup(buffer);
 
 		if (g_crc32) {
 			sprintf(buffer,"%08lx", segment->crc32);
-			table[i + 1][11] = strdup(buffer);
+			table[i + 1][12] = strdup(buffer);
 		}
 	}
 
 	// Draw the table. Frees all allocated elements.
 
-	draw_table(&table[0][0], n_stages + 3, g_crc32 ? 12 : 11);
+	draw_table(&table[0][0], n_stages + 3, g_crc32 ? 13 : 12);
 }
 
 // Actually back up identified segments.
@@ -1133,7 +1198,8 @@ backup_candidate(as_segment_t* segments, uint32_t base, uint32_t n_stages)
 
 		printf("%s", success ? "\nSuccessfully backed up" : "\nFailed to back up");
 		printf(" %u Aerospike database segments", n_stages + 2);
-		printf(" for instance %u, namespace %u.\n", sp->inst, sp->nsid);
+		printf(" for instance %u, namespace \'%s\' (nsid %u).\n",
+				sp->inst, sp->nsnm == NULL ? "<null>" : sp->nsnm, sp->nsid);
 	}
 
 	// Free all allocated resources. Removes all created files if failure.
@@ -1188,7 +1254,7 @@ backup_candidate_file(as_segment_t* segments, as_io_t* ios,
 
 	if (rc < 0) {
 		if (g_verbose) {
-			printf("Could not create segment file \"%s\""
+			printf("Could not create segment file \'%s\'"
 					": error was %d: %s.\n",
 					pathname, errno, strerror(errno));
 		}
@@ -1210,7 +1276,7 @@ backup_candidate_file(as_segment_t* segments, as_io_t* ios,
 
 	if (rc < 0) {
 		if (g_verbose) {
-			printf("Could not allocate storage for segment file \"%s\""
+			printf("Could not allocate storage for segment file \'%s\'"
 					": error was %d: %s.\n",
 					pathname, errno, strerror(errno));
 		}
@@ -1611,7 +1677,7 @@ analyze_restore(void)
 
 	if (! check_dir(g_pathdir, false, false)) {
 		if (g_verbose) {
-			printf("Cannot read from directory \"%s\"", g_pathdir);
+			printf("Cannot read from directory \'%s\'", g_pathdir);
 			printf(": either it doesn't exist"
 					" or we don't have read permission.\n");
 		}
@@ -1626,12 +1692,12 @@ analyze_restore(void)
 		// Note: n_files and error are valid even if list_files() returned false.
 
 		if (g_verbose) {
-			printf("Did not find any Aerospike database segment files");
+			printf("\nDid not find any Aerospike database segment files");
 			if (g_inst != INV_INST) {
 				printf(", instance %u", g_inst);
 			}
-			if (g_nsid != INV_NSID) {
-				printf(", namespace %u", g_nsid);
+			if (g_nsnm != NULL) {
+				printf(", namespace \'%s\'", g_nsnm);
 			}
 			if (error != 0) {
 				printf(": error was %d: %s", error, strerror(error));
@@ -1646,14 +1712,30 @@ analyze_restore(void)
 	// Must have one base segment file, one treex segment file,
 	// and at least one stage segment file.
 
+	bool candidates = false;
+
 	for (uint32_t i = 0; i < n_files; i++) {
 		as_file_t* file = &files[i];
 
 		if (file->type == TYPE_BASE) {
+			candidates = true;
 			if (! analyze_restore_candidate(files, n_files, i)) {
 				free(files);
 				return false;
 			}
+		}
+	}
+
+	if (! candidates) {
+		if (g_verbose) {
+			printf("\nDid not find any Aerospike database segment files");
+			if (g_inst != INV_INST) {
+				printf(", instance %u", g_inst);
+			}
+			if (g_nsnm != NULL) {
+				printf(", namespace \'%s\'", g_nsnm);
+			}
+			printf(".\n");
 		}
 	}
 
@@ -1758,7 +1840,7 @@ display_files(as_file_t* files, uint32_t base, uint32_t n_stages)
 {
 	// The table to be displayed.
 
-	char* table[n_stages + 3][9];
+	char* table[n_stages + 3][10];
 
 	// Create the table header.
 
@@ -1769,8 +1851,9 @@ display_files(as_file_t* files, uint32_t base, uint32_t n_stages)
 	table[0][4] = strdup("segsz");
 	table[0][5] = strdup("inst");
 	table[0][6] = strdup("nsid");
-	table[0][7] = strdup("type");
-	table[0][8] = strdup("stage");
+	table[0][7] = strdup("name");
+	table[0][8] = strdup("type");
+	table[0][9] = strdup("stage");
 
 	// Create the table body.
 
@@ -1800,6 +1883,14 @@ display_files(as_file_t* files, uint32_t base, uint32_t n_stages)
 		sprintf(buffer,"%u", file->nsid);
 		table[i + 1][6] = strdup(buffer);
 
+		if (file->type == TYPE_BASE) {
+			sprintf(buffer, "%s", file->nsnm == NULL ? "<null>" : file->nsnm);
+		}
+		else {
+			sprintf(buffer, "-");
+		}
+		table[i + 1][7] = strdup(buffer);
+
 		switch(file->type) {
 		case TYPE_BASE:
 			sprintf(buffer,"base");
@@ -1811,7 +1902,7 @@ display_files(as_file_t* files, uint32_t base, uint32_t n_stages)
 			sprintf(buffer,"stage");
 			break;
 		}
-		table[i + 1][7] = strdup(buffer);
+		table[i + 1][8] = strdup(buffer);
 
 		if (file->type == TYPE_STAGE) {
 			sprintf(buffer, "%03x", file->stage);
@@ -1819,12 +1910,12 @@ display_files(as_file_t* files, uint32_t base, uint32_t n_stages)
 		else {
 			sprintf(buffer, "-");
 		}
-		table[i + 1][8] = strdup(buffer);
+		table[i + 1][9] = strdup(buffer);
 	}
 
 	// Draw the table. All allocated entries will be freed.
 
-	draw_table(&table[0][0], n_stages + 3, 9);
+	draw_table(&table[0][0], n_stages + 3, 10);
 }
 
 // Actually restore candidate set of segment files.
@@ -1865,7 +1956,8 @@ restore_candidate(as_file_t* files, uint32_t base, uint32_t n_stages)
 
 		printf("%s", success ? "\nSuccessfully restored" : "\nFailed to restore");
 		printf(" %u Aerospike database segment files", n_stages + 2);
-		printf(" for instance %u, namespace %u.\n", fp->inst, fp->nsid);
+		printf(" for instance %u, namespace \'%s\' (nsid %u).\n",
+				fp->inst, fp->nsnm == NULL ? "<null>" : fp->nsnm, fp->nsid);
 	}
 
 	// Clean up all intermediate operations.
@@ -1944,7 +2036,7 @@ restore_candidate_segment(as_file_t* files, as_io_t* ios, int* shmids,
 
 	if (rc < 0) {
 		if (g_verbose) {
-			printf("Could not open segment file \"%s\""
+			printf("Could not open segment file \'%s\'"
 					": error was %d: %s.\n",
 					pathname, errno, strerror(errno));
 		}
@@ -2117,7 +2209,7 @@ validate_file_name(const char* pathname, as_file_t* file)
 		}
 		else {
 			if (g_verbose) {
-				printf("Segment file name \"%s\""
+				printf("Segment file name \'%s\'"
 						" contains invalid characters.\n",
 						pathname);
 			}
@@ -2176,7 +2268,7 @@ validate_file_name(const char* pathname, as_file_t* file)
 		return false;
 	}
 
-	// Extract stage number from key.
+	// Extract stage number from key (if this is a stage).
 
 	file->stage = (file->type == TYPE_STAGE) ? (uint32_t)key : 0;
 
@@ -2185,6 +2277,8 @@ validate_file_name(const char* pathname, as_file_t* file)
 		free(old_ptr);
 		return false;
 	}
+
+	// Done.
 
 	free(old_ptr);
 	return true;
@@ -2205,7 +2299,7 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 		*error = errno;
 
 		if (g_verbose) {
-			printf("Cannot open directory \"%s\": error was %d: %s.\n",
+			printf("Cannot open directory \'%s\': error was %d: %s.\n",
 					g_pathdir, *error, strerror(*error));
 		}
 
@@ -2241,20 +2335,70 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 		// Get status of file.
 
 		if (stat(pathname, &statbuf) < 0) {
-
 			if (g_verbose) {
 				printf("Did not find info for Aerospike database segment"
-						" file \"%s\": error was %d: %s.\n", pathname, errno,
+						" file \'%s\': error was %d: %s.\n", pathname, errno,
 						strerror(errno));
 			}
-
 			continue;
 		}
 
-		if ((g_inst != INV_INST && valid_file.inst != g_inst) ||
-				(g_nsid != INV_NSID && valid_file.nsid != g_nsid)) {
+		// Check whether the instance number is a match.
+
+		if (g_inst != INV_INST && valid_file.inst != g_inst) {
 			continue;
 		}
+
+		// Extract namespace name from file (if this is a base segment file).
+
+		if (valid_file.type == TYPE_BASE) {
+			int rc = open(pathname, O_RDONLY, DEFAULT_MODE);
+			if (rc < 0) {
+				continue;
+			}
+
+			int fd = rc;
+
+			off_t offset = lseek(fd, (off_t)NAMESPACE_OFF, SEEK_SET);
+			if (offset != (off_t)NAMESPACE_OFF) {
+				close(fd);
+				continue;
+			}
+
+			// Read the namespace name.
+
+			char nsnm[NAMESPACE_LEN + 1];
+
+			ssize_t bytes_read = read(fd, (void*)nsnm, NAMESPACE_LEN);
+
+			if (bytes_read != NAMESPACE_LEN) {
+				close(fd);
+				continue;
+			}
+
+			nsnm[NAMESPACE_LEN] = '\0';
+
+			close(fd);
+
+			valid_file.nsnm = strdup(nsnm);
+		}
+		else {
+			valid_file.nsnm = NULL;
+		}
+
+		// Check whether the namespace name is a match.
+
+		if (valid_file.type == TYPE_BASE && g_nsnm != NULL) {
+			if (valid_file.nsnm == NULL) {
+				continue;
+			}
+			else if (strcmp(valid_file.nsnm, g_nsnm) != 0) {
+				free(valid_file.nsnm);
+				continue;
+			}
+		}
+
+		// Found a matching file. Add to list.
 
 		(*n_files)++;
 
@@ -2266,6 +2410,7 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 		as_file_t* file = *files + *n_files - 1;
 
 		file->key = valid_file.key;
+		file->nsnm = valid_file.nsnm;
 		file->uid = statbuf.st_uid;
 		file->gid = statbuf.st_gid;
 		file->mode = statbuf.st_mode;
@@ -2327,7 +2472,7 @@ draw_table(char** table, uint32_t n_rows, uint32_t n_cols)
 
 	for (uint32_t j = 0; j < n_cols; j++) {
 		char* field = strfmt_width(*(table + 0 * n_cols + j),
-				colwidth[j] + NUM_BLANKS, false);
+				colwidth[j], NUM_BLANKS, false);
 
 		printf("%s", field);
 	}
@@ -2335,7 +2480,7 @@ draw_table(char** table, uint32_t n_rows, uint32_t n_cols)
 
 	for (uint32_t j = 0; j < n_cols; j++) {
 		char* field = strfmt_width(*(table + 0 * n_cols + j),
-				colwidth[j] + NUM_BLANKS, true);
+				colwidth[j], NUM_BLANKS, true);
 
 		printf("%s", field);
 	}
@@ -2346,7 +2491,7 @@ draw_table(char** table, uint32_t n_rows, uint32_t n_cols)
 	for (uint32_t i = 1; i < n_rows; i++) {
 		for (uint32_t j = 0; j < n_cols; j++) {
 			char* field = strfmt_width(*(table + i * n_cols + j),
-					colwidth[j] + NUM_BLANKS, false);
+					colwidth[j], NUM_BLANKS, false);
 
 			printf("%s", field);
 		}
@@ -2367,25 +2512,27 @@ draw_table(char** table, uint32_t n_rows, uint32_t n_cols)
 // Note: Uses a statically-allocated buffer; should not be freed.
 
 static char*
-strfmt_width(char* string, uint32_t width, bool dashes)
+strfmt_width(char* string, uint32_t width, uint32_t n_blanks, bool dashes)
 {
 	static char buffer[MAX_BUFFER];
 
 	uint32_t len = (uint32_t)strnlen(string, width);
-	uint32_t n_chars = len < width ? len : width;
+	uint32_t n_chars;
 
 	if (dashes) {
+		n_chars = width;
 		memset(buffer, '-', n_chars);
 	}
 	else {
+		n_chars = len < width ? len : width;
 		strncpy(buffer, string, n_chars);
 	}
 
 	// Pad with blanks.
 
-	memset(buffer + n_chars, ' ', width - n_chars);
+	memset(buffer + n_chars, ' ', width - n_chars + n_blanks);
 
-	buffer[width] = '\0';
+	buffer[width + n_blanks] = '\0';
 
 	return buffer;
 }

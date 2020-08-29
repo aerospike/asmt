@@ -82,8 +82,7 @@ instance 0.
 
 To backup a different server instance, use -i to specify the instance index.
 
-(To backup a specific namespace only, use -n to specify the namespace xmem-id.
-TBD - ASMT to use name eventually.)
+(To backup a specific namespace only, use -n to specify the namespace name.)
 
 For other backup options, use -h or see the list below.
 
@@ -116,8 +115,7 @@ instance 0.
 
 To restore a different server instance, use -i to specify the instance index.
 
-(To restore a specific namespace only, use -n to specify the namespace xmem-id.
-TBD - ASMT to use name eventually.)
+(To restore a specific namespace only, use -n to specify the namespace name.)
 
 For other restore options, use -h or see the list below.
 
