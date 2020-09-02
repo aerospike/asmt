@@ -114,7 +114,7 @@ typedef struct as_io_s {
 // Constant globals.
 
 static const char g_fullname[] =	"Aerospike Shared Memory Tool";
-static const char g_version[] =		"Version 1.1";
+static const char g_version[] =		"Version 1.0";
 static const char g_copyright[] =	"Copyright (C) 2020 Aerospike, Inc.";
 static const char g_all_rights[] =	"All rights reserved.";
 
