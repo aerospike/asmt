@@ -561,8 +561,8 @@ usage(bool verbose)
 
 	printf("    Backs up all Aerospike database segments with instance 0\n");
 	printf("    (all namespaces) to the directory /home/aerospike/backups.\n");
-	printf("	Requests that file compression be applied and crc32 checks\n");
-	printf("	be made on all backups.\n");
+	printf("    Requests that file compression be applied and crc32 checks\n");
+	printf("    be made on all backups.\n");
 
 	printf("\n");
 
@@ -577,7 +577,7 @@ usage(bool verbose)
 
 	printf("\n");
 
-	sprintf(buffer, "%s -r -i3 -n bar -p /home/aerospike/backups -cv -t 128 -z",
+	sprintf(buffer, "%s -r -i3 -n bar -p /home/aerospike/backups -cv -t 128",
 			g_progname);
 	printf("%s\n", buffer);
 
@@ -587,7 +587,7 @@ usage(bool verbose)
 	printf("    (namespace \'bar\') from the directory /home/aerospike/backups.\n");
 	printf("    Requests that crc32 checks be made on all restorations.\n");
 	printf("    Requests verbose output. Uses no more than 128 threads\n");
-	printf("    for file I/O.\n");
+	printf("    for file I/O. Any compressed files will be decompressed.\n");
 
 	printf("\n");
 }
