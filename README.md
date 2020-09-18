@@ -41,12 +41,12 @@ Before you can build ASMT, you need to install some libraries.
 
 For CentOS:
 ```
-$ sudo yum install make gcc
+$ sudo yum install make gcc zlib-devel
 ```
 
 For Debian or Ubuntu:
 ```
-$ sudo apt-get install make gcc libc6-dev
+$ sudo apt-get install make gcc libc6-dev zlib1g-dev
 ```
 
 **Build the package.**
@@ -72,7 +72,7 @@ $ sudo ./asmt -b -v -p index-backup
 where:
 ```
  -b - backup (as opposed to restore - must specify one or the other)
- -v - verbose output (optional)
+ -v - verbose output (optional but recommended)
  -p <backup path> - mandatory directory path specifying where your index backup
 files will be saved
 ```
@@ -84,14 +84,19 @@ To backup a different server instance, use -i to specify the instance index.
 
 To backup a specific namespace only, use -n to specify the namespace name.
 
+To compress the files while backing them up, use the -z option.
+
 For other backup options, use -h or see the list below.
 
 When the backup is complete, there will be files in the specified directory
 corresponding to all the relevant shared memory blocks. The file names are the
-same as the shared memory keys.
+same as the shared memory keys. Uncompressed file names end in '.dat' while
+compressed files end in '.dat.gz'. Note that the base file for a namespace
+is never compressed as ASMT must examine its contents prior to restoring any
+files for its namespace.
 
 Note - if files of the relevant names already exist in the directory, the backup
-will not start, i.e. it will not overwrite the files.
+will not start, i.e., it will not overwrite the files.
 
 If the backup was successful, the host machine may then be rebooted. The index
 shared memory blocks are lost, but the files will allow them to be restored
@@ -105,7 +110,7 @@ $ sudo ./asmt -r -v -p index-backup
 where:
 ```
  -r - restore (as opposed to backup - must specify one or the other)
- -v - verbose output (optional)
+ -v - verbose output (optional but recommended)
  -p <backup path> - mandatory directory path specifying where your index backup
 files have been saved
 ```
@@ -116,6 +121,9 @@ instance 0.
 To restore a different server instance, use -i to specify the instance index.
 
 To restore a specific namespace only, use -n to specify the namespace name.
+
+There is no need to specify the -z option when restoring, even if the files
+are compressed (i.e., they were created using the -z option).
 
 For other restore options, use -h or see the list below.
 
