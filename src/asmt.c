@@ -88,7 +88,9 @@ typedef struct as_file_s {
 	uid_t uid;
 	gid_t gid;
 	unsigned int mode;
+	size_t filsz;
 	size_t segsz;
+	bool compress;
 	uint32_t stage;
 	uint32_t inst;
 	uint32_t nsid;
@@ -102,9 +104,18 @@ typedef struct as_io_s {
 	int fd;
 	bool write;
 	void* memptr;
+	size_t filsz;
 	size_t segsz;
+	bool compress;
 	uLong crc32;
 } as_io_t;
+
+// Information about a compressed file.
+
+typedef struct as_cmp_s {
+	size_t segsz;
+	uLong crc32;
+} __attribute__((packed)) as_cmp_t;
 
 
 //==========================================================
@@ -118,7 +129,8 @@ static const char g_version[] =		"Version 1.0";
 static const char g_copyright[] =	"Copyright (C) 2020 Aerospike, Inc.";
 static const char g_all_rights[] =	"All rights reserved.";
 
-static const char* DATABASE_FILE_EXTENSION = ".dat";
+static const char* FILE_EXTENSION = ".dat";
+static const char* FILE_EXTENSION_CMP = ".dat.gz";
 
 static const key_t AS_XMEM_KEY_BASE =		(key_t)0xAE000000;
 static const key_t AS_XMEM_TREEX_KEY_BASE =	(key_t)0x00000001;
@@ -154,6 +166,12 @@ enum { INV_ARENA = 0xffff	};	// Any unacceptable value.
 enum { NAMESPACE_OFF = 1024};	// Offset of namespace in base segment.
 enum { NAMESPACE_LEN = 32};		// Length of namespace name.
 
+enum { CMPHDR_OFF = 0		};	// Offset of header in compressed file.
+enum { CMPHDR_LEN = sizeof(as_cmp_t)}; // Length of header in compressed file.
+enum { CMPCHUNK_LEN = 1048576};	// Compression chunk size.
+
+enum { THR_MULT = 2			};	// Thread multiplier.
+
 // General globals.
 
 static char* g_pathdir = NULL;
@@ -162,6 +180,7 @@ static char* g_nsnm = NULL;
 static uint32_t g_inst = 0; // Default is instance 0.
 static bool g_analyze = false;
 static bool g_backup = false;
+static bool g_compress = false;
 static bool g_crc32 = false;
 static bool g_restore = false;
 static bool g_verbose = false;
@@ -173,6 +192,7 @@ static uLong g_crc32_init;
 static as_io_t* g_ios;
 static bool g_ios_ok;
 static pthread_mutex_t g_io_mutex;
+static pthread_mutex_t g_tm_mutex;
 static uint32_t g_n_ios;
 static uint32_t g_next_io;
 static uint64_t g_total_to_transfer;
@@ -201,8 +221,12 @@ static bool backup_candidate_check_crc32(as_io_t* ios, as_segment_t* segments, u
 static void backup_candidate_cleanup(as_segment_t* segments, as_io_t* ios, uint32_t base, uint32_t idx, uint32_t step, bool remove_files);
 static bool start_io(as_io_t* ios, uint32_t n_ios);
 static void* run_io(void* args);
-static bool pwrite_file(int fd, const void* buf, size_t size, uLong* crc);
-static bool pread_file(int fd, void* buf, size_t size, uLong* crc);
+static bool write_file(int fd, const void* buf, size_t segsz, bool compress, uLong* crc);
+static bool pwrite_file(int fd, const void* buf, size_t segsz, uLong* crc);
+static bool zwrite_file(int fd, const void* buf, size_t segsz, uLong* crc);
+static bool read_file(int fd, void* buf, size_t filsz, size_t segsz, bool compress, uLong* crc);
+static bool pread_file(int fd, void* buf, size_t segsz, uLong* crc);
+static bool zread_file(int fd, void* buf, size_t filsz, size_t segsz, uLong* crc);
 static bool analyze_restore(void);
 static bool analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base);
 static void display_files(as_file_t* files, uint32_t base, uint32_t n_stages);
@@ -215,7 +239,7 @@ static bool list_files(as_file_t** files, uint32_t* n_files, int* error);
 static int qsort_compare_files(const void* left, const void* right);
 static void draw_table(char** table, uint32_t n_rows, uint32_t n_cols);
 static char* strfmt_width(char* string, uint32_t width, uint32_t n_blanks, bool dashes);
-static const char* strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile);
+static char* strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile);
 static void gettime_hmst(struct timespec* time, time_t* hours, time_t* minutes, time_t* seconds, time_t* tenths);
 
 
@@ -235,7 +259,7 @@ main(int argc, char* argv[])
 
 	int opt;
 
-	while ((opt = getopt(argc, argv, "abchi:n:p:rt:v")) != -1) {
+	while ((opt = getopt(argc, argv, "abchi:n:p:rt:vz")) != -1) {
 		switch (opt) {
 
 		case 'a':
@@ -290,6 +314,11 @@ main(int argc, char* argv[])
 			g_verbose = true;
 			break;
 
+		case'z':
+			// Request compressed backup.
+			g_compress = true;
+			break;
+
 		default:
 			// Unknown command line option.
 			usage(true);
@@ -331,6 +360,12 @@ main(int argc, char* argv[])
 		exit(EXIT_FAILURE);
 	}
 
+	// Don't need to specify compress with restore.
+
+	if (g_restore && g_compress) {
+		printf("Unnecessary to specify compress ('-z') with restore ('-r').\n\n");
+	}
+
 	// Can't specify an instance number outside the valid range.
 	// Note: Instance can be 0.
 
@@ -344,7 +379,7 @@ main(int argc, char* argv[])
 	// Determine maximum number of threads--use num_cpus() if not specified.
 
 	if (g_max_threads == INV_THREADS) {
-		g_max_threads = num_cpus();
+		g_max_threads = THR_MULT * num_cpus();
 	}
 	else if (g_max_threads < MIN_THREADS || g_max_threads > MAX_THREADS) {
 		printf("Max threads must be in the range %d..%d (use '-t').\n\n",
@@ -394,8 +429,14 @@ main(int argc, char* argv[])
 		}
 		else if (g_backup) {
 			printf("Performing backup operation");
-			if (g_crc32) {
+			if (g_crc32 && ! g_compress) {
 				printf(" with crc32 checking");
+			}
+			else if (g_compress && ! g_crc32) {
+				printf(" with compression");
+			}
+			else if (g_compress && g_crc32) {
+				printf(" with compression and crc32 checking");
 			}
 			printf(".\n");
 		}
@@ -452,6 +493,7 @@ usage(bool verbose)
 	printf(" [-r]");
 	printf(" [-t <threads>]");
 	printf(" [-v]");
+	printf(" [-z]");
 
 	printf("\n\n");
 
@@ -463,9 +505,10 @@ usage(bool verbose)
 	printf("-n filter by namespace name (default is all namespaces)\n");
 	printf("-p path of directory (mandatory)\n");
 	printf("-r restore (operation or advisory with '-a')\n");
-	printf("-t maximum number of threads for I/O (default is #CPUs,"
-			" in this case %u)\n", num_cpus());
+	printf("-t maximum number of threads for I/O (default is %u times #CPUs,"
+			" in this case %u)\n", THR_MULT, THR_MULT * num_cpus());
 	printf("-v verbose output\n");
+	printf("-z compress files on backup\n");
 
 	printf("\n");
 
@@ -475,8 +518,8 @@ usage(bool verbose)
 
 	printf("1. Must be run as root (uid 0, gid 0); try sudo.\n");
 	printf("2. The '-c' option has a significant performance cost.\n");
-	printf("3. Should be run in verbose mode ('-v') if possible.\n");
-	printf("4. crc32 results can be checked with Linux crc32 command.\n");
+	printf("3. However, this is reduced when combined with the '-z' option.\n");
+	printf("4. Should be run in verbose mode ('-v') if possible.\n");
 
 	if (! verbose) {
 		return;
@@ -507,7 +550,19 @@ usage(bool verbose)
 	printf("\n");
 
 	printf("    Backs up all Aerospike database segments with instance 0\n");
-	printf("    (any namespace) to the directory /home/aerospike/backups.\n");
+	printf("    (all namespaces) to the directory /home/aerospike/backups.\n");
+
+	printf("\n");
+
+	sprintf(buffer, "%s -b -p /home/aerospike/backups -zc", g_progname);
+	printf("%s\n", buffer);
+
+	printf("\n");
+
+	printf("    Backs up all Aerospike database segments with instance 0\n");
+	printf("    (all namespaces) to the directory /home/aerospike/backups.\n");
+	printf("	Requests that file compression be applied and crc32 checks\n");
+	printf("	be made on all backups.\n");
 
 	printf("\n");
 
@@ -517,12 +572,12 @@ usage(bool verbose)
 	printf("\n");
 
 	printf("    Analyzes whether any Aerospike database segments with\n");
-	printf("    instance 2 (any namespace) can be backed up to the directory\n");
+	printf("    instance 2 (all namespaces) can be backed up to the directory\n");
 	printf("    /home/aerospike/backups. Requests verbose output.\n");
 
 	printf("\n");
 
-	sprintf(buffer, "%s -r -i3 -n bar -p /home/aerospike/backups -cv -t 128",
+	sprintf(buffer, "%s -r -i3 -n bar -p /home/aerospike/backups -cv -t 128 -z",
 			g_progname);
 	printf("%s\n", buffer);
 
@@ -1237,7 +1292,7 @@ backup_candidate_file(as_segment_t* segments, as_io_t* ios,
 
 	if (memptr == (void*)-1) {
 		if (g_verbose) {
-			printf("Could not attach base segment %08x"
+			printf("Could not attach segment %08x"
 					": error was %d: %s.\n", segment->key,
 					errno, strerror(errno));
 		}
@@ -1253,15 +1308,28 @@ backup_candidate_file(as_segment_t* segments, as_io_t* ios,
 
 	io->write = true;
 	io->memptr = memptr;
+	io->filsz = 0;
 	io->segsz = segment->segsz;
 	io->crc32 = g_crc32_init;
+
+	// Construct the filename extension.
+
+	const char* extension;
+
+	if (segment->type != TYPE_BASE && g_compress) {
+		io->compress = true;
+		extension = FILE_EXTENSION_CMP;
+	}
+	else {
+		io->compress = false;
+		extension = FILE_EXTENSION;
+	}
 
 	// Construct the filename for the segment file.
 
 	char pathname[PATH_MAX + 1];
 
-	sprintf(pathname, "%s/%08x%s", g_pathdir, segment->key,
-			DATABASE_FILE_EXTENSION);
+	sprintf(pathname, "%s/%08x%s", g_pathdir, segment->key, extension);
 
 	// Open (create) the segment file.
 
@@ -1285,22 +1353,26 @@ backup_candidate_file(as_segment_t* segments, as_io_t* ios,
 
 	io->fd = rc;
 
-	// Allocate storage space for the data to be written to the file.
+	if(! io->compress) {
 
-	rc = posix_fallocate(io->fd, 0, (off_t)segment->segsz);
+		// Allocate storage space for the data to be written to the file.
+		// Note: We reserve full space even for compressed files.
 
-	if (rc < 0) {
-		if (g_verbose) {
-			printf("Could not allocate storage for segment file \'%s\'"
-					": error was %d: %s.\n",
-					pathname, errno, strerror(errno));
+		rc = posix_fallocate(io->fd, 0, (off_t)segment->segsz);
+
+		if (rc < 0) {
+			if (g_verbose) {
+				printf("Could not allocate storage for segment file \'%s\'"
+						": error was %d: %s.\n",
+						pathname, errno, strerror(errno));
+			}
+
+			// Clean up all intermediate operations.
+
+			backup_candidate_cleanup(segments, ios, base, idx, 3, true);
+
+			return false;
 		}
-
-		// Clean up all intermediate operations.
-
-		backup_candidate_cleanup(segments, ios, base, idx, 3, true);
-
-		return false;
 	}
 
 	return true;
@@ -1372,8 +1444,10 @@ backup_candidate_cleanup(as_segment_t* segments, as_io_t* ios,
 
 		char pathname[PATH_MAX + 1];
 
-		sprintf(pathname, "%s/%08x%s", g_pathdir, segment->key,
-				DATABASE_FILE_EXTENSION);
+		const char* extension = segment->type != TYPE_BASE && g_compress ?
+				FILE_EXTENSION_CMP : FILE_EXTENSION;
+
+		sprintf(pathname, "%s/%08x%s", g_pathdir, segment->key, extension);
 
 		unlink(pathname);
 	}
@@ -1415,9 +1489,10 @@ start_io(as_io_t* ios, uint32_t n_ios)
 		return false;
 	}
 
-	// Initialize global mutex.
+	// Initialize global mutexes.
 
 	pthread_mutex_init(&g_io_mutex, NULL);
+	pthread_mutex_init(&g_tm_mutex, NULL);
 
 	// Thread table.
 
@@ -1461,10 +1536,10 @@ start_io(as_io_t* ios, uint32_t n_ios)
 	}
 	else {
 		if (g_verbose && g_decile_transferred != 10) {
-			printf("Total I/O time was %s.\n",
-					strtime_diff_eta(&g_io_start_time,
-									 &io_end_time,
-									 g_decile_transferred));
+			char* time_str = strtime_diff_eta(&g_io_start_time, &io_end_time,
+									 g_decile_transferred);
+			printf("Total I/O time was %s.\n", time_str);
+			free(time_str);
 		}
 	}
 
@@ -1512,11 +1587,13 @@ run_io(void* args)
 		bool success;
 
 		if (io->write) {
-			success = pwrite_file(io->fd, io->memptr, io->segsz, &io->crc32);
+			success = write_file(io->fd, io->memptr, io->segsz, io->compress,
+					&io->crc32);
 			fsync(io->fd); // Ignore return code.
 		}
 		else {
-			success = pread_file(io->fd, io->memptr, io->segsz, &io->crc32);
+			success = read_file(io->fd, io->memptr, io->filsz, io->segsz,
+					io->compress, &io->crc32);
 		}
 
 		// If this request failed, stop the other threads.
@@ -1558,10 +1635,10 @@ run_io(void* args)
 						printf(".\n");
 					}
 					else {
-						printf(" in %s.\n",
-								strtime_diff_eta(&g_io_start_time,
-												 &io_end_time,
-												 g_decile_transferred));
+						char* time_str = strtime_diff_eta(&g_io_start_time,
+								&io_end_time, g_decile_transferred);
+						printf(" in %s.\n", time_str);
+						free(time_str);
 					}
 				}
 			}
@@ -1573,14 +1650,194 @@ run_io(void* args)
 	return NULL;
 }
 
-// Write a complete file. Compute crc32 if requested.
+// Write a complete file (compressed if requested). Compute crc32 if requested.
 
 static bool
-pwrite_file(int fd, const void* buf, size_t size, uLong* crc)
+write_file(int fd, const void* buf, size_t segsz, bool compress, uLong* crc)
+{
+	if (compress) {
+		return zwrite_file(fd, buf, segsz, crc);
+	}
+	else {
+		return pwrite_file(fd, buf, segsz, crc);
+	}
+}
+
+// Write a complete file (compressed). Retrieve crc32 if requested.
+
+static bool
+zwrite_file(int fd, const void* buf, size_t segsz, uLong* crc)
+{
+	// Set up and write initial compressed file header.
+
+	as_cmp_t header;
+
+	header.crc32 = g_crc32_init;
+	header.segsz = segsz;
+
+	if (lseek(fd, (off_t)CMPHDR_OFF, SEEK_SET) != (off_t)CMPHDR_OFF) {
+		if (g_verbose) {
+			printf("Could not write compressed file header to file.\n");
+		}
+
+		return false;
+	}
+
+	if (write(fd, (void*)&header, CMPHDR_LEN) != (size_t)CMPHDR_LEN) {
+		if (g_verbose) {
+			printf("Could not write compressed file header to file.\n");
+		}
+
+		return false;
+	}
+
+	// Allocate buffer for compression intermediate results.
+
+	uint8_t* cmp_buf = (uint8_t*)malloc(CMPCHUNK_LEN);
+
+	if (cmp_buf == NULL) {
+		if (g_verbose) {
+			printf("Could not allocate memory to compress file.\n");
+		}
+
+		return false;
+	}
+
+	// Set up the compression.
+
+	z_stream defstream;
+
+	defstream.zalloc = Z_NULL;
+	defstream.zfree = Z_NULL;
+	defstream.opaque = Z_NULL;
+
+	// Use gzip compression; as a side effect, get crc32 for free.
+
+	int windowBits = 15 + 16; // Use max memory and use gzip algorithm.
+	int memLevel = 9; // Use maximum memory level.
+
+	if (deflateInit2(&defstream, Z_BEST_SPEED, Z_DEFLATED, windowBits, memLevel,
+			Z_DEFAULT_STRATEGY) != Z_OK) {
+
+		if (g_verbose) {
+			printf("Did not initialize compression engine while writing"
+					" segment to file.\n");
+		}
+
+		free(cmp_buf);
+
+		return false;
+	}
+
+	// Whole segment is available in buf.
+
+	defstream.avail_in = (uInt)segsz;
+	defstream.next_in = (Bytef*)buf;
+
+	// Actually compress the segment.
+
+	int ret;
+
+	do{
+		// Compress one chunk at a time.
+
+		defstream.avail_out = (uInt)CMPCHUNK_LEN;
+		defstream.next_out = (Bytef*)cmp_buf;
+
+		ret = deflate(&defstream, Z_FINISH);
+		if (ret == Z_STREAM_ERROR) {
+			if (g_verbose) {
+				printf("Could not compress file.\n");
+			}
+
+			free(cmp_buf);
+
+			return false;
+		}
+
+		size_t have_bytes = CMPCHUNK_LEN - defstream.avail_out;
+
+		// Write this chunk to output file.
+
+		if (write(fd, (void*)cmp_buf, have_bytes) != (ssize_t)have_bytes) {
+			if (g_verbose) {
+				printf("Could not write to compressed file.\n");
+			}
+
+			(void)deflateEnd(&defstream);
+			free(cmp_buf);
+
+			return false;
+		}
+	} while (defstream.avail_out == 0);
+
+	// Finished compressing. Was it successful?
+
+	if (defstream.avail_in != 0) {
+		if (g_verbose) {
+			printf("Failed to compress file.\n");
+		}
+
+		(void)deflateEnd(&defstream);
+		free(cmp_buf);
+
+		return false;
+	}
+
+	// Shut down compression engine.
+
+	deflateEnd(&defstream);
+
+	// Free intermediate compression buffer.
+
+	free(cmp_buf);
+
+	// Ensure compression engine finished happily.
+
+	if (ret != Z_STREAM_END) {
+		if (g_verbose) {
+			printf("Did not finish compressing segment to file.\n");
+		}
+
+		return false;
+	}
+
+	// Should we retrieve crc32?
+
+	*crc = g_crc32 ? defstream.adler : g_crc32_init;
+
+	// Go back and write compressed file header (ALWAYS).
+
+	header.segsz = segsz;
+	header.crc32 = defstream.adler;
+
+	if (lseek(fd, (off_t)CMPHDR_OFF, SEEK_SET) != (off_t)CMPHDR_OFF) {
+		if (g_verbose) {
+			printf("Could not write compressed file header to file.\n");
+		}
+
+		return false;
+	}
+
+	if (write(fd, (void*)&header, CMPHDR_LEN) != (size_t)CMPHDR_LEN) {
+		if (g_verbose) {
+			printf("Could not write compressed file header to file.\n");
+		}
+
+		return false;
+	}
+
+	return true;
+}
+
+// Write a complete file (uncompressed). Compute crc32 if requested.
+
+static bool
+pwrite_file(int fd, const void* buf, size_t segsz, uLong* crc)
 {
 	// newsize is running size, as pwrite(2) progresses.
 
-	ssize_t newsize = (ssize_t)size;
+	ssize_t newsize = (ssize_t)segsz;
 
 	// result is result of individual pwrite(2) operation.
 
@@ -1593,14 +1850,7 @@ pwrite_file(int fd, const void* buf, size_t size, uLong* crc)
 	// Write chunks of segment, as large as possible.
 
 	while ((result = pwrite(fd, buf, (size_t)newsize, offset)) != newsize) {
-		if (result < 0) {
-			return false;
-		}
-
-		// Should only happen if newsize was zero (0).
-
-		if (result == 0) {
-			errno = EINVAL;
+		if (result <= 0) {
 			return false;
 		}
 
@@ -1626,14 +1876,206 @@ pwrite_file(int fd, const void* buf, size_t size, uLong* crc)
 	return true;
 }
 
-// Read a complete file. Compute crc32 if requested.
+// Read a complete file (compressed if requested). Compute crc32 if requested.
 
 static bool
-pread_file(int fd, void* buf, size_t size, uLong* crc)
+read_file(int fd, void* buf, size_t filsz, size_t segsz, bool compress,
+		uLong* crc)
+{
+	if (compress) {
+		return zread_file(fd, buf, filsz, segsz, crc);
+	}
+	else {
+		return pread_file(fd, buf, segsz, crc);
+	}
+}
+
+// Read a complete file (compressed). Compute crc32 if requested.
+
+static bool
+zread_file(int fd, void* buf, size_t filsz, size_t segsz, uLong* crc)
+{
+	(void)filsz;
+
+	// Read compressed file header.
+
+	as_cmp_t header;
+
+	if (lseek(fd, (off_t)CMPHDR_OFF, SEEK_SET) != (off_t)CMPHDR_OFF) {
+		if (g_verbose) {
+			printf("Could not seek to header in compressed file.\n");
+		}
+
+		return false;
+	}
+
+	if (read(fd, (void*)&header, CMPHDR_LEN) != (size_t)CMPHDR_LEN) {
+		if (g_verbose) {
+			printf("Could not read header from compressed file.\n");
+		}
+
+		return false;
+	}
+
+	// Sanity check header.
+
+	if (segsz != header.segsz) {
+		if (g_verbose) {
+			printf("Compressed file header segment size mismatch:"
+					" expecting %lu, found %lu.\n", segsz, header.segsz);
+		}
+
+		return false;
+	}
+
+	// Set up compression engine.
+
+	z_stream infstream;
+
+	infstream.zalloc = Z_NULL;
+	infstream.zfree = Z_NULL;
+	infstream.opaque = Z_NULL;
+	infstream.avail_in = 0;
+	infstream.next_in = Z_NULL;
+
+	// Specify gzip only.
+
+	int windowBits = 15 + 32; // Use maximum memory and zlib or gzip algorithm.
+
+	int ret = inflateInit2(&infstream, windowBits);
+
+	if (ret != Z_OK) {
+		if (g_verbose) {
+			printf("Unable to initialize compression engine.\n");
+		}
+
+		return false;
+	}
+
+	// Allocate memory for compression engine buffer.
+
+	uint8_t* cmp_buf = (uint8_t*)malloc(CMPCHUNK_LEN);
+
+	if (cmp_buf == NULL) {
+		if (g_verbose) {
+			printf("Unable to allocate memory for compression engine.\n");
+		}
+
+		(void)inflateEnd(&infstream);
+
+		return false;
+	}
+
+	// Decompress file one chunk at a time.
+
+	size_t have_bytes = 0;
+	void* my_buf = buf;
+
+	do {
+
+		// Read a chunk of the file into cmp_buf.
+
+		ssize_t bytes_read = read(fd, (void*)cmp_buf, CMPCHUNK_LEN);
+
+		if (bytes_read < 0) {
+			if (g_verbose) {
+				printf("Error while reading compressed file.\n");
+			}
+
+			(void)inflateEnd(&infstream);
+			free(cmp_buf);
+
+			return false;
+		}
+
+		// If read(2) returned no bytes, we're done.
+
+		if (bytes_read == 0) {
+			break;
+		}
+
+		infstream.avail_in = (uInt)bytes_read;
+		infstream.next_in = cmp_buf;
+
+		do {
+			infstream.avail_out = CMPCHUNK_LEN;
+			my_buf += have_bytes;
+			infstream.next_out = my_buf;
+
+			ret = inflate(&infstream, Z_SYNC_FLUSH);
+
+			switch (ret) {
+			case Z_ERRNO:
+			case Z_NEED_DICT:
+			case Z_DATA_ERROR:
+			case Z_MEM_ERROR:
+			case Z_STREAM_ERROR:
+
+				if (g_verbose) {
+					printf("Error while decompressing file");
+
+					switch (ret) {
+
+					case Z_ERRNO:
+						printf(": error reading compressed file");
+						break;
+
+					case Z_STREAM_ERROR:
+						printf(": invalid compression level");
+						break;
+
+					case Z_DATA_ERROR:
+						printf(": invalid or incomplete deflate data");
+						break;
+
+					case Z_MEM_ERROR:
+						printf(": out of memory");
+						break;
+
+					case Z_VERSION_ERROR:
+						printf(": zlib version mismatch");
+						break;
+
+					default:
+						printf(": unknown error (%d)", ret);
+						break;
+					}
+
+					printf(" (%lu bytes into file).\n",
+							infstream.total_in + CMPHDR_LEN);
+				}
+
+				(void)inflateEnd(&infstream);
+				free(cmp_buf);
+
+				return false;
+			}
+
+			have_bytes = CMPCHUNK_LEN - infstream.avail_out;
+
+		} while (infstream.avail_out == 0);
+
+	} while (ret != Z_STREAM_END);
+
+	(void)inflateEnd(&infstream);
+
+	free(cmp_buf);
+
+	// Retrieve crc32, if requested.
+
+	*crc = g_crc32 ? header.crc32 : g_crc32_init;
+
+	return ret == Z_STREAM_END || ret == Z_OK ? true : false;
+}
+
+// Read a complete file (uncompressed). Compute crc32 if requested.
+
+static bool
+pread_file(int fd, void* buf, size_t segsz, uLong* crc)
 {
 	// newsize is running size, as pread(2) progresses.
 
-	ssize_t newsize = (ssize_t)size;
+	ssize_t newsize = (ssize_t)segsz;
 
 	// result is result of individual pread(2) operation.
 
@@ -1643,17 +2085,8 @@ pread_file(int fd, void* buf, size_t size, uLong* crc)
 
 	off_t offset = 0;
 
-	// Read chunks of segment, as large as possible.
-
 	while ((result = pread(fd, buf, (size_t)newsize, offset)) != newsize) {
-		if (result < 0) {
-			return false;
-		}
-
-		// Should only happen if newsize was zero (0).
-
-		if (result == 0) {
-			errno = EINVAL;
+		if (result <= 0) {
 			return false;
 		}
 
@@ -1896,7 +2329,7 @@ display_files(as_file_t* files, uint32_t base, uint32_t n_stages)
 {
 	// The table to be displayed.
 
-	char* table[n_stages + 3][10];
+	char* table[n_stages + 3][11];
 
 	// Create the table header.
 
@@ -1904,12 +2337,13 @@ display_files(as_file_t* files, uint32_t base, uint32_t n_stages)
 	table[0][1] = strdup("uid");
 	table[0][2] = strdup("gid");
 	table[0][3] = strdup("mode");
-	table[0][4] = strdup("segsz");
-	table[0][5] = strdup("inst");
-	table[0][6] = strdup("nsid");
-	table[0][7] = strdup("name");
-	table[0][8] = strdup("type");
-	table[0][9] = strdup("stage");
+	table[0][4] = strdup("filsz");
+	table[0][5] = strdup("segsz");
+	table[0][6] = strdup("inst");
+	table[0][7] = strdup("nsid");
+	table[0][8] = strdup("name");
+	table[0][9] = strdup("type");
+	table[0][10] = strdup("stage");
 
 	// Create the table body.
 
@@ -1930,14 +2364,17 @@ display_files(as_file_t* files, uint32_t base, uint32_t n_stages)
 		sprintf(buffer,"0%o", file->mode);
 		table[i + 1][3] = strdup(buffer);
 
-		sprintf(buffer,"%lu", file->segsz);
+		sprintf(buffer, "%lu", file->filsz);
 		table[i + 1][4] = strdup(buffer);
 
-		sprintf(buffer,"%u", file->inst);
+		sprintf(buffer, "%lu", file->segsz);
 		table[i + 1][5] = strdup(buffer);
 
-		sprintf(buffer,"%u", file->nsid);
+		sprintf(buffer,"%u", file->inst);
 		table[i + 1][6] = strdup(buffer);
+
+		sprintf(buffer,"%u", file->nsid);
+		table[i + 1][7] = strdup(buffer);
 
 		if (file->type == TYPE_BASE) {
 			sprintf(buffer, "%s", file->nsnm == NULL ? "<null>" : file->nsnm);
@@ -1945,7 +2382,7 @@ display_files(as_file_t* files, uint32_t base, uint32_t n_stages)
 		else {
 			sprintf(buffer, "-");
 		}
-		table[i + 1][7] = strdup(buffer);
+		table[i + 1][8] = strdup(buffer);
 
 		switch(file->type) {
 		case TYPE_BASE:
@@ -1958,7 +2395,7 @@ display_files(as_file_t* files, uint32_t base, uint32_t n_stages)
 			sprintf(buffer,"stage");
 			break;
 		}
-		table[i + 1][8] = strdup(buffer);
+		table[i + 1][9] = strdup(buffer);
 
 		if (file->type == TYPE_STAGE) {
 			sprintf(buffer, "%03x", file->stage);
@@ -1966,12 +2403,12 @@ display_files(as_file_t* files, uint32_t base, uint32_t n_stages)
 		else {
 			sprintf(buffer, "-");
 		}
-		table[i + 1][9] = strdup(buffer);
+		table[i + 1][10] = strdup(buffer);
 	}
 
 	// Draw the table. All allocated entries will be freed.
 
-	draw_table(&table[0][0], n_stages + 3, 10);
+	draw_table(&table[0][0], n_stages + 3, 11);
 }
 
 // Actually restore candidate set of segment files.
@@ -2076,15 +2513,19 @@ restore_candidate_segment(as_file_t* files, as_io_t* ios, int* shmids,
 
 	io->write = false;
 	io->memptr = memptr;
+	io->filsz = file->filsz;
 	io->segsz = file->segsz;
 	io->crc32 = g_crc32_init;
+	io->compress = file->compress;
 
 	// Construct the filename for the segment file.
 
 	char pathname[PATH_MAX + 1];
 
-	sprintf(pathname, "%s/%08x%s", g_pathdir, file->key,
-			DATABASE_FILE_EXTENSION);
+	const char* extension = file->type != TYPE_BASE && file->compress ?
+			FILE_EXTENSION_CMP : FILE_EXTENSION;
+
+	sprintf(pathname, "%s/%08x%s", g_pathdir, file->key, extension);
 
 	// Open the segment file (for reading).
 
@@ -2225,9 +2666,10 @@ validate_file_name(const char* pathname, as_file_t* file)
 		return false;
 	}
 
-	// Ensure that file extension is ".dat".
+	// Ensure that file extension is ".dat" or ".dat.gz".
 
-	if (strcmp(dot_ptr, DATABASE_FILE_EXTENSION) != 0) {
+	if ((strcmp(dot_ptr, FILE_EXTENSION) != 0) &&
+			(strcmp(dot_ptr, FILE_EXTENSION_CMP) != 0)) {
 		free(old_ptr);
 		return false;
 	}
@@ -2294,7 +2736,7 @@ validate_file_name(const char* pathname, as_file_t* file)
 		return false;
 	}
 
-	// Determine namespace from key base.
+	// Determine namespace ID from key base.
 
 	key = key & ~(0xf << AS_XMEM_INSTANCE_KEY_SHIFT);
 
@@ -2415,8 +2857,8 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 
 			int fd = rc;
 
-			off_t offset = lseek(fd, (off_t)NAMESPACE_OFF, SEEK_SET);
-			if (offset != (off_t)NAMESPACE_OFF) {
+			if (lseek(fd, (off_t)NAMESPACE_OFF, SEEK_SET)
+					!= (off_t)NAMESPACE_OFF) {
 				close(fd);
 				continue;
 			}
@@ -2425,16 +2867,14 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 
 			char nsnm[NAMESPACE_LEN + 1];
 
-			ssize_t bytes_read = read(fd, (void*)nsnm, NAMESPACE_LEN);
-
-			if (bytes_read != NAMESPACE_LEN) {
+			if (read(fd, (void*)nsnm, NAMESPACE_LEN) != NAMESPACE_LEN) {
 				close(fd);
 				continue;
 			}
 
-			nsnm[NAMESPACE_LEN] = '\0';
-
 			close(fd);
+
+			nsnm[NAMESPACE_LEN] = '\0';
 
 			valid_file.nsnm = strdup(nsnm);
 		}
@@ -2445,13 +2885,65 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 		// Check whether the namespace name is a match.
 
 		if (valid_file.type == TYPE_BASE && g_nsnm != NULL) {
-			if (valid_file.nsnm == NULL) {
-				continue;
-			}
-			else if (strcmp(valid_file.nsnm, g_nsnm) != 0) {
+			assert(valid_file.nsnm != NULL);
+
+			if (strcmp(valid_file.nsnm, g_nsnm) != 0) {
 				free(valid_file.nsnm);
 				continue;
 			}
+		}
+
+		// Extract segment size for compressed files.
+
+		size_t segsz;
+		bool compress;
+
+		if (valid_file.type != TYPE_BASE) {
+			char* dot_ptr = strchr(dirent->d_name, '.');
+
+			// Is this a compressed file?
+
+			if (dot_ptr != NULL &&
+					strcmp(dot_ptr, FILE_EXTENSION_CMP) == 0) {
+
+				int rc = open(pathname, O_RDONLY, DEFAULT_MODE);
+
+				if (rc < 0) {
+					assert(valid_file.nsnm == NULL);
+					continue;
+				}
+
+				int fd = rc;
+
+				// Read the compressed file header.
+
+				if (lseek(fd, (off_t)CMPHDR_OFF, SEEK_SET) != (off_t)CMPHDR_OFF) {
+					close(fd);
+					assert(valid_file.nsnm == NULL);
+					continue;
+				}
+
+				as_cmp_t header;
+
+				if (read(fd, (void*)&header, CMPHDR_LEN) != CMPHDR_LEN) {
+					close(fd);
+					assert(valid_file.nsnm == NULL);
+					continue;
+				}
+
+				close(fd);
+
+				segsz = header.segsz;
+				compress = true;
+			}
+			else {
+				segsz = (size_t)statbuf.st_size;
+				compress = false;
+			}
+		}
+		else {
+			segsz = (size_t)statbuf.st_size;
+			compress = false;
 		}
 
 		// Found a matching file. Add to list.
@@ -2470,7 +2962,9 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 		file->uid = statbuf.st_uid;
 		file->gid = statbuf.st_gid;
 		file->mode = statbuf.st_mode;
-		file->segsz = (size_t)statbuf.st_size;
+		file->filsz = (size_t)statbuf.st_size;
+		file->segsz = segsz;
+		file->compress = compress;
 		file->stage = valid_file.stage;
 		file->inst = valid_file.inst;
 		file->nsid = valid_file.nsid;
@@ -2595,11 +3089,16 @@ strfmt_width(char* string, uint32_t width, uint32_t n_blanks, bool dashes)
 
 #define ONE_BILLION 1000000000
 
-static const char*
+static char*
 strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile)
 {
+	pthread_mutex_lock(&g_tm_mutex);
+
 	static char outbuff[256];
 	char* outptr = outbuff;
+	char* retptr = NULL;
+
+	outbuff[0] = '\0';
 
 	// Rationalize start and end.
 
@@ -2626,7 +3125,10 @@ strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile)
 
 	if (hours < 0 || minutes < 0 || seconds < 0 || tenths < 0) {
 		sprintf(outptr, "<null>");
-		return outbuff;
+		retptr = strdup(outbuff);
+		pthread_mutex_unlock(&g_tm_mutex);
+
+		return retptr;
 	}
 
 	if (hours != 0) {
@@ -2640,7 +3142,10 @@ strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile)
 	}
 
 	if (decile < 1 || decile >= 10) {
-		return outbuff;
+		retptr = strdup(outbuff);
+		pthread_mutex_unlock(&g_tm_mutex);
+
+		return retptr;
 	}
 
 	// Add the ETA.
@@ -2659,7 +3164,10 @@ strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile)
 
 	if (hours < 0 || minutes < 0 || seconds < 0 || tenths < 0) {
 		sprintf(outptr, "<null>");
-		return outbuff;
+		retptr = strdup(outbuff);
+		pthread_mutex_unlock(&g_tm_mutex);
+
+		return retptr;
 	}
 
 	if (hours != 0) {
@@ -2672,7 +3180,10 @@ strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile)
 		sprintf(outptr, "(ETA: %ld.%lds)", seconds, tenths);
 	}
 
-	return outbuff;
+	retptr = strdup(outbuff);
+	pthread_mutex_unlock(&g_tm_mutex);
+
+	return retptr;
 }
 
 static void
