@@ -170,8 +170,6 @@ enum { CMPHDR_OFF = 0		};	// Offset of header in compressed file.
 enum { CMPHDR_LEN = sizeof(as_cmp_t)}; // Length of header in compressed file.
 enum { CMPCHUNK_LEN = 1048576};	// Compression chunk size.
 
-enum { THR_MULT = 2			};	// Thread multiplier.
-
 // General globals.
 
 static char* g_pathdir = NULL;
@@ -379,7 +377,7 @@ main(int argc, char* argv[])
 	// Determine maximum number of threads--use num_cpus() if not specified.
 
 	if (g_max_threads == INV_THREADS) {
-		g_max_threads = THR_MULT * num_cpus();
+		g_max_threads = num_cpus();
 	}
 	else if (g_max_threads < MIN_THREADS || g_max_threads > MAX_THREADS) {
 		printf("Max threads must be in the range %d..%d (use '-t').\n\n",
@@ -505,8 +503,8 @@ usage(bool verbose)
 	printf("-n filter by namespace name (default is all namespaces)\n");
 	printf("-p path of directory (mandatory)\n");
 	printf("-r restore (operation or advisory with '-a')\n");
-	printf("-t maximum number of threads for I/O (default is %u times #CPUs,"
-			" in this case %u)\n", THR_MULT, THR_MULT * num_cpus());
+	printf("-t maximum number of threads for I/O (default is #CPUs,"
+			" in this case %u)\n", num_cpus());
 	printf("-v verbose output\n");
 	printf("-z compress files on backup\n");
 
