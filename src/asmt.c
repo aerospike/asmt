@@ -1874,7 +1874,7 @@ pwrite_file(int fd, const void* buf, size_t segsz, uLong* crc)
 
 	// Finish crc32 computation on last chunk, if incomplete.
 
-	if (result > 0 && g_crc32) {
+	if (result >= 0 && g_crc32) {
 		*crc = crc32(*crc, buf, (uInt)result);
 	}
 
@@ -2088,7 +2088,7 @@ zread_file(int fd, void* buf, size_t filsz, size_t segsz, uLong* crc)
 
 	// Retrieve crc32, if requested.
 
-	*crc = g_crc32 ? header.crc32 : g_crc32_init;
+	*crc = g_crc32 ? infstream.adler : g_crc32_init;
 
 	return ret == Z_STREAM_END || ret == Z_OK ? true : false;
 }
