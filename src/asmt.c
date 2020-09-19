@@ -165,21 +165,24 @@ enum { MIN_ARENA = 0x100	};	// Minimum acceptable value.
 enum { MAX_ARENA = 0x1FF	};	// Maximum acceptable value.
 enum { INV_ARENA = 0xffff	};	// Any unacceptable value.
 
-enum { NAMESPACE_OFF = 1024};	// Offset of namespace in base segment.
-enum { NAMESPACE_LEN = 32};		// Length of namespace name.
+enum { NAMESPACE_OFF = 1024	};	// Offset of namespace in base segment.
+enum { NAMESPACE_LEN = 32	};	// Length of namespace name.
 
 enum { CMPHDR_OFF = 0		};	// Offset of header in compressed file.
-enum { CMPHDR_LEN = sizeof(as_cmp_t)}; // Length of header in compressed file.
-enum { CMPHDR_MAGIC = 0X41534D54 }; // asmt magic number ('ASMT' in ASCII).
-enum { CMPHDR_VER = 1 };		// asmt header current version
+enum { CMPHDR_LEN = sizeof(as_cmp_t) }; // Length of header in compressed file.
+enum { CMPHDR_MAG = 0X41534D54 }; // asmt magic number ('ASMT' in ASCII).
+enum { CMPHDR_VER = 1 		};	// asmt header current version
 
-enum { CMPCHUNK = 1048576};		// Compression chunk size.
+enum { CMPCHUNK = 1048576	};	// Compression chunk size.
 
 // General globals.
 
 static char* g_pathdir = NULL;
 static char* g_progname = NULL;
 static char* g_nsnm = NULL;
+static char* g_nsnm_base = NULL;
+static char** g_nsnm_array = NULL;
+static uint32_t g_nsnm_count = 0;
 static uint32_t g_inst = 0; // Default is instance 0.
 static bool g_analyze = false;
 static bool g_backup = false;
@@ -209,6 +212,8 @@ static struct timespec g_io_start_time;
 
 static void usage(bool verbose);
 static void print_newline_and_blanks(size_t n_blanks);
+static int init_nsnm_list(void);
+static void exit_nsnm_list(void);
 static bool analyze(void);
 static bool analyze_backup(void);
 static bool check_dir(const char* pathname, bool is_write, bool create);
@@ -243,7 +248,6 @@ static void draw_table(char** table, uint32_t n_rows, uint32_t n_cols);
 static char* strfmt_width(char* string, uint32_t width, uint32_t n_blanks, bool dashes);
 static char* strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile);
 static void gettime_hmst(struct timespec* time, time_t* hours, time_t* minutes, time_t* seconds, time_t* tenths);
-
 
 
 //==========================================================
@@ -455,9 +459,60 @@ main(int argc, char* argv[])
 
 	g_crc32_init = g_crc32 ? crc32(0L, Z_NULL, 0) : 0;
 
-	// Perform requested operation.
+	// Get the list of namespace names over which to operate.
 
-	exit(analyze() ? EXIT_SUCCESS : EXIT_FAILURE);
+	int ret = init_nsnm_list();
+
+	if (ret < 0) {
+		if (g_verbose) {
+			printf("Failed to extract namespace names from list.\n");
+		}
+
+		exit(EXIT_FAILURE);
+	}
+
+	// Operate over each namespace name provided (if any).
+
+	bool success;
+
+	if (g_nsnm_count == 0) {
+
+		// No namespace name provided.
+
+		success = analyze();
+	}
+	else {
+
+		// List of namespace names provided.
+
+		success = true;
+		uint32_t count = 0;
+
+		for (uint32_t i = 0; i < g_nsnm_count; i++) {
+			g_nsnm = g_nsnm_array[i];
+
+			if (strcmp(g_nsnm, "") == 0) {
+				continue;
+			}
+
+			count++;
+
+			if (! analyze()) {
+				success = false;
+				break;
+			}
+		}
+
+		if (count != g_nsnm_count) {
+			if (g_verbose) {
+				printf("\nInvalid namespace names provided.\n");
+			}
+		}
+	}
+
+	exit_nsnm_list();
+
+	exit(success ? EXIT_SUCCESS : EXIT_FAILURE);
 }
 
 
@@ -487,7 +542,7 @@ usage(bool verbose)
 	printf(" [-c]");
 	printf(" [-h]");
 	printf(" [-i <instance>]");
-	printf(" [-n <name>]");
+	printf(" [-n <name>[,<name>...]]");
 
 	print_newline_and_blanks(first_len);
 
@@ -522,6 +577,7 @@ usage(bool verbose)
 	printf("2. The '-c' option has a significant performance cost.\n");
 	printf("3. However, this is reduced when combined with the '-z' option.\n");
 	printf("4. Should be run in verbose mode ('-v') if possible.\n");
+	printf("5. A comma-separated list of namespace names may be provided.\n");
 
 	if (! verbose) {
 		return;
@@ -605,6 +661,93 @@ print_newline_and_blanks(size_t n_blanks)
 	buffer[n_blanks] = '\0';
 
 	printf("\n%s", buffer);
+}
+
+static int
+init_nsnm_list(void)
+{
+	assert(g_nsnm_base == NULL);
+	assert(g_nsnm_array == NULL);
+	assert(g_nsnm_count == 0);
+
+	if (g_nsnm == NULL) {
+		return 0;
+	}
+
+	char* list = strdup(g_nsnm);
+
+	if (list == NULL) {
+		return 0;
+	}
+
+	// Save the original namespace name list.
+
+	g_nsnm_base = g_nsnm;
+
+	// Extract namespace names from the list.
+
+	char* tmp_list = list;
+
+	while (tmp_list != NULL) {
+
+		// Find next element in list.
+
+		char* tmp_elmt = strchr(tmp_list, ',');
+
+		if (tmp_elmt != NULL) {
+			*tmp_elmt = '\0';
+		}
+
+		// Add element to array.
+
+		g_nsnm_count++;
+
+		g_nsnm_array = (char**)realloc(g_nsnm_array,
+										g_nsnm_count * sizeof(char*));
+
+		if (g_nsnm_array == NULL) {
+			if (g_verbose) {
+				printf("Could not allocate memory for namespace name array.\n");
+			}
+
+			g_nsnm_base = NULL;
+			free(list);
+
+			return -1;
+		}
+
+		g_nsnm_array[g_nsnm_count - 1] = strdup(tmp_list);
+
+		// Go to next element (if any).
+
+		tmp_list = tmp_elmt == NULL ? NULL : ++tmp_elmt;
+	}
+
+	free(list);
+
+	g_nsnm = NULL;
+
+	return (int)g_nsnm_count;
+}
+
+static void
+exit_nsnm_list(void)
+{
+	if (g_nsnm_array == NULL) {
+		return;
+	}
+
+	for (uint32_t i = 0; i < g_nsnm_count; i++) {
+		assert(g_nsnm_array[i] != NULL);
+
+		free(g_nsnm_array[i]);
+	}
+
+	free(g_nsnm_array);
+
+	g_nsnm_array = NULL;
+	g_nsnm = g_nsnm_base;
+	g_nsnm_base = NULL;
 }
 
 // Analyze (and perform?) which operations (backup/restore) can be performed.
@@ -1107,13 +1250,19 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 
 		printf("%s -b", g_progname);
 
-		if (g_inst != 0) {
-			printf(" -i%u", g_inst);
-		}
+		printf(" -i %u", segments[base].inst);
 
-		printf(" -n%u", segments[base].nsid);
+		printf(" -n %s", segments[base].nsnm);
 
 		printf(" -p %s", g_pathdir);
+
+		if (g_compress) {
+			printf(" -z");
+		}
+
+		if (g_crc32) {
+			printf(" -c");
+		}
 
 		printf("\n");
 
@@ -1673,7 +1822,7 @@ zwrite_file(int fd, const void* buf, size_t segsz, uLong* crc)
 
 	as_cmp_t header;
 
-	header.magic = CMPHDR_MAGIC;
+	header.magic = CMPHDR_MAG;
 	header.version = CMPHDR_VER;
 	header.crc32 = g_crc32_init;
 	header.segsz = segsz;
@@ -1811,7 +1960,7 @@ zwrite_file(int fd, const void* buf, size_t segsz, uLong* crc)
 
 	// Go back and write compressed file header (ALWAYS).
 
-	header.magic = CMPHDR_MAGIC;
+	header.magic = CMPHDR_MAG;
 	header.version = CMPHDR_VER;
 	header.segsz = segsz;
 	header.crc32 = defstream.adler;
@@ -1924,11 +2073,11 @@ zread_file(int fd, void* buf, size_t filsz, size_t segsz, uLong* crc)
 
 	// Sanity check header.
 
-	if (header.magic != CMPHDR_MAGIC) {
+	if (header.magic != CMPHDR_MAG) {
 		if (g_verbose) {
 			printf("Compressed file header bad magic number:"
 					" expecting 0x%08x, found 0x%08x;",
-					CMPHDR_MAGIC, header.magic);
+					CMPHDR_MAG, header.magic);
 		}
 
 		return false;
@@ -2328,13 +2477,15 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base)
 
 		printf("%s -r", g_progname);
 
-		if (g_inst != 0) {
-			printf(" -i%u", g_inst);
-		}
+		printf(" -i %u", files[base].inst);
 
-		printf(" -n%u", files[base].nsid);
+		printf(" -n %s", files[base].nsnm);
 
 		printf(" -p %s", g_pathdir);
+
+		if (g_crc32) {
+			printf(" -c");
+		}
 
 		printf("\n");
 
@@ -2960,7 +3111,7 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 
 				// Sanity check header.
 
-				if (header.magic != CMPHDR_MAGIC) {
+				if (header.magic != CMPHDR_MAG) {
 					assert(valid_file.nsnm == NULL);
 					continue;
 				}
