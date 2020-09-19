@@ -190,7 +190,6 @@ static uLong g_crc32_init;
 static as_io_t* g_ios;
 static bool g_ios_ok;
 static pthread_mutex_t g_io_mutex;
-static pthread_mutex_t g_tm_mutex;
 static uint32_t g_n_ios;
 static uint32_t g_next_io;
 static uint64_t g_total_to_transfer;
@@ -1487,10 +1486,9 @@ start_io(as_io_t* ios, uint32_t n_ios)
 		return false;
 	}
 
-	// Initialize global mutexes.
+	// Initialize global mutex.
 
 	pthread_mutex_init(&g_io_mutex, NULL);
-	pthread_mutex_init(&g_tm_mutex, NULL);
 
 	// Thread table.
 
@@ -3090,9 +3088,7 @@ strfmt_width(char* string, uint32_t width, uint32_t n_blanks, bool dashes)
 static char*
 strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile)
 {
-	pthread_mutex_lock(&g_tm_mutex);
-
-	static char outbuff[256];
+	char outbuff[256];
 	char* outptr = outbuff;
 	char* retptr = NULL;
 
@@ -3124,7 +3120,6 @@ strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile)
 	if (hours < 0 || minutes < 0 || seconds < 0 || tenths < 0) {
 		sprintf(outptr, "<null>");
 		retptr = strdup(outbuff);
-		pthread_mutex_unlock(&g_tm_mutex);
 
 		return retptr;
 	}
@@ -3141,7 +3136,6 @@ strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile)
 
 	if (decile < 1 || decile >= 10) {
 		retptr = strdup(outbuff);
-		pthread_mutex_unlock(&g_tm_mutex);
 
 		return retptr;
 	}
@@ -3163,7 +3157,6 @@ strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile)
 	if (hours < 0 || minutes < 0 || seconds < 0 || tenths < 0) {
 		sprintf(outptr, "<null>");
 		retptr = strdup(outbuff);
-		pthread_mutex_unlock(&g_tm_mutex);
 
 		return retptr;
 	}
@@ -3179,7 +3172,6 @@ strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile)
 	}
 
 	retptr = strdup(outbuff);
-	pthread_mutex_unlock(&g_tm_mutex);
 
 	return retptr;
 }
