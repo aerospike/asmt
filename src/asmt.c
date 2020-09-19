@@ -113,6 +113,8 @@ typedef struct as_io_s {
 // Information about a compressed file.
 
 typedef struct as_cmp_s {
+	uint32_t magic;
+	uint32_t version;
 	size_t segsz;
 	uLong crc32;
 } __attribute__((packed)) as_cmp_t;
@@ -168,7 +170,10 @@ enum { NAMESPACE_LEN = 32};		// Length of namespace name.
 
 enum { CMPHDR_OFF = 0		};	// Offset of header in compressed file.
 enum { CMPHDR_LEN = sizeof(as_cmp_t)}; // Length of header in compressed file.
-enum { CMPCHUNK_LEN = 1048576};	// Compression chunk size.
+enum { CMPHDR_MAGIC = 0X41534D54 }; // asmt magic number ('ASMT' in ASCII).
+enum { CMPHDR_VER = 1 };		// asmt header current version
+
+enum { CMPCHUNK = 1048576};		// Compression chunk size.
 
 // General globals.
 
@@ -1668,6 +1673,8 @@ zwrite_file(int fd, const void* buf, size_t segsz, uLong* crc)
 
 	as_cmp_t header;
 
+	header.magic = CMPHDR_MAGIC;
+	header.version = CMPHDR_VER;
 	header.crc32 = g_crc32_init;
 	header.segsz = segsz;
 
@@ -1689,7 +1696,7 @@ zwrite_file(int fd, const void* buf, size_t segsz, uLong* crc)
 
 	// Allocate buffer for compression intermediate results.
 
-	uint8_t* cmp_buf = (uint8_t*)malloc(CMPCHUNK_LEN);
+	uint8_t* cmp_buf = (uint8_t*)malloc(CMPCHUNK);
 
 	if (cmp_buf == NULL) {
 		if (g_verbose) {
@@ -1737,7 +1744,7 @@ zwrite_file(int fd, const void* buf, size_t segsz, uLong* crc)
 	do{
 		// Compress one chunk at a time.
 
-		defstream.avail_out = (uInt)CMPCHUNK_LEN;
+		defstream.avail_out = (uInt)CMPCHUNK;
 		defstream.next_out = (Bytef*)cmp_buf;
 
 		ret = deflate(&defstream, Z_FINISH);
@@ -1751,7 +1758,7 @@ zwrite_file(int fd, const void* buf, size_t segsz, uLong* crc)
 			return false;
 		}
 
-		size_t have_bytes = CMPCHUNK_LEN - defstream.avail_out;
+		size_t have_bytes = CMPCHUNK - defstream.avail_out;
 
 		// Write this chunk to output file.
 
@@ -1804,6 +1811,8 @@ zwrite_file(int fd, const void* buf, size_t segsz, uLong* crc)
 
 	// Go back and write compressed file header (ALWAYS).
 
+	header.magic = CMPHDR_MAGIC;
+	header.version = CMPHDR_VER;
 	header.segsz = segsz;
 	header.crc32 = defstream.adler;
 
@@ -1915,6 +1924,26 @@ zread_file(int fd, void* buf, size_t filsz, size_t segsz, uLong* crc)
 
 	// Sanity check header.
 
+	if (header.magic != CMPHDR_MAGIC) {
+		if (g_verbose) {
+			printf("Compressed file header bad magic number:"
+					" expecting 0x%08x, found 0x%08x;",
+					CMPHDR_MAGIC, header.magic);
+		}
+
+		return false;
+	}
+
+	if (header.version != CMPHDR_VER) {
+		if (g_verbose) {
+			printf("Compressed file header bad version number:"
+					" expecting 0x%08x, found 0x%08x;",
+					CMPHDR_VER, header.version);
+		}
+
+		return false;
+	}
+
 	if (segsz != header.segsz) {
 		if (g_verbose) {
 			printf("Compressed file header segment size mismatch:"
@@ -1950,7 +1979,7 @@ zread_file(int fd, void* buf, size_t filsz, size_t segsz, uLong* crc)
 
 	// Allocate memory for compression engine buffer.
 
-	uint8_t* cmp_buf = (uint8_t*)malloc(CMPCHUNK_LEN);
+	uint8_t* cmp_buf = (uint8_t*)malloc(CMPCHUNK);
 
 	if (cmp_buf == NULL) {
 		if (g_verbose) {
@@ -1971,7 +2000,7 @@ zread_file(int fd, void* buf, size_t filsz, size_t segsz, uLong* crc)
 
 		// Read a chunk of the file into cmp_buf.
 
-		ssize_t bytes_read = read(fd, (void*)cmp_buf, CMPCHUNK_LEN);
+		ssize_t bytes_read = read(fd, (void*)cmp_buf, CMPCHUNK);
 
 		if (bytes_read < 0) {
 			if (g_verbose) {
@@ -1994,7 +2023,7 @@ zread_file(int fd, void* buf, size_t filsz, size_t segsz, uLong* crc)
 		infstream.next_in = cmp_buf;
 
 		do {
-			infstream.avail_out = CMPCHUNK_LEN;
+			infstream.avail_out = CMPCHUNK;
 			my_buf += have_bytes;
 			infstream.next_out = my_buf;
 
@@ -2047,7 +2076,7 @@ zread_file(int fd, void* buf, size_t filsz, size_t segsz, uLong* crc)
 				return false;
 			}
 
-			have_bytes = CMPCHUNK_LEN - infstream.avail_out;
+			have_bytes = CMPCHUNK - infstream.avail_out;
 
 		} while (infstream.avail_out == 0);
 
@@ -2928,6 +2957,18 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 				}
 
 				close(fd);
+
+				// Sanity check header.
+
+				if (header.magic != CMPHDR_MAGIC) {
+					assert(valid_file.nsnm == NULL);
+					continue;
+				}
+
+				if (header.version != CMPHDR_VER) {
+					assert(valid_file.nsnm == NULL);
+					continue;
+				}
 
 				segsz = header.segsz;
 				compress = true;
