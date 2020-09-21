@@ -83,6 +83,8 @@ instance 0.
 To backup a different server instance, use -i to specify the instance index.
 
 To backup a specific namespace only, use -n to specify the namespace name.
+(Note: A comma-separated list of namespace names may be supplied, e.g.,
+'-n foo,bar,test'.)
 
 To compress the files while backing them up, use the -z option.
 
@@ -121,6 +123,8 @@ instance 0.
 To restore a different server instance, use -i to specify the instance index.
 
 To restore a specific namespace only, use -n to specify the namespace name.
+(Note: A comma-separated list of namespace names may be supplied, e.g.,
+'-n foo,bar,test'.)
 
 There is no need to specify the -z option when restoring, even if the files
 are compressed (i.e., they were created using the -z option).
