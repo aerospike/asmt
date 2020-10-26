@@ -762,12 +762,12 @@ analyze_backup(void)
 		if (g_verbose) {
 			printf("Cannot write to directory \'%s\'", g_pathdir);
 			if (g_analyze) {
-				printf(": either it doesn't exist,"
+				printf(": either it does not exist,"
 						" we don't have write permission,"
 						" or we're running with \'-a\'.\n");
 			}
 			else {
-				printf(": either it doesn't exist"
+				printf(": either it does not exist"
 						" or we don't have write permission.\n");
 			}
 		}
@@ -2389,7 +2389,7 @@ analyze_restore(void)
 	if (! check_dir(g_pathdir, false, false)) {
 		if (g_verbose) {
 			printf("Cannot read from directory \'%s\'", g_pathdir);
-			printf(": either it doesn't exist"
+			printf(": either it does not exist"
 					" or we don't have read permission.\n");
 		}
 		return false;
