@@ -168,9 +168,13 @@ enum { INV_ARENA = 0xffff	};	// Any unacceptable value.
 enum { NAMESPACE_OFF = 1024	};	// Offset of namespace in base segment.
 enum { NAMESPACE_LEN = 32	};	// Length of namespace name.
 
+enum { N_ARENAS_OFF = 2152	};	// Offset of n_arenas in base segment.
+enum { N_ARENAS_LEN = sizeof(uint32_t) }; // Length of n_arenas field.
+
 enum { CMPHDR_OFF = 0		};	// Offset of header in compressed file.
 enum { CMPHDR_LEN = sizeof(as_cmp_t) }; // Length of header in compressed file.
-enum { CMPHDR_MAG = 0X41534D54 }; // asmt magic number ('ASMT' in ASCII).
+enum { CMPHDR_MAG1 = 0X41534D54 }; // asmt magic number ('TMSA' in ASCII).
+enum { CMPHDR_MAG2 = 0X544D5341 }; // asmt magic number ('ASMT' in ASCII).
 enum { CMPHDR_VER = 1 		};	// asmt header current version
 
 enum { CMPCHUNK = 1048576	};	// Compression chunk size.
@@ -222,6 +226,7 @@ static bool stat_segment(int shmid, as_segment_t** segment, int* error);
 static int qsort_compare_segments(const void* left, const void* right);
 static bool analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments, uint32_t base);
 static void display_segments(as_segment_t* segments, uint32_t base, uint32_t n_stages);
+static bool analyze_backup_sanity(as_segment_t* segments, uint32_t base, uint32_t n_stages);
 static bool backup_candidate(as_segment_t* segments, uint32_t base, uint32_t n_stages);
 static bool backup_candidate_file(as_segment_t* segments, as_io_t* ios, uint32_t base, uint32_t idx);
 static bool backup_candidate_check_crc32(as_io_t* ios, as_segment_t* segments, uint32_t base, uint32_t n_stages);
@@ -236,6 +241,7 @@ static bool pread_file(int fd, void* buf, size_t segsz, uLong* crc);
 static bool zread_file(int fd, void* buf, size_t filsz, size_t segsz, uLong* crc);
 static bool analyze_restore(void);
 static bool analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base);
+static bool analyze_restore_sanity(as_file_t* files, uint32_t base, uint32_t n_stages);
 static void display_files(as_file_t* files, uint32_t base, uint32_t n_stages);
 static bool restore_candidate(as_file_t* files, uint32_t base, uint32_t n_stages);
 static void restore_candidate_cleanup(int* shmids, as_io_t* ios, uint32_t idx, uint32_t step, bool remove_segments);
@@ -358,14 +364,6 @@ main(int argc, char* argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	// Don't compute crc32 values if analyze is also set.
-
-	if (g_analyze && g_crc32) {
-		printf("Can't specify crc32 ('-c') with analyze ('-a').\n\n");
-		usage(false);
-		exit(EXIT_FAILURE);
-	}
-
 	// Don't need to specify compress with restore.
 
 	if (g_restore && g_compress) {
@@ -413,11 +411,13 @@ main(int argc, char* argv[])
 
 	// Print command as issued.
 
-	printf("%s", g_progname);
-	for (int i = 1; i < argc; i++) {
-		printf(" %s", argv[i]);
+	if (g_verbose) {
+		printf("%s", g_progname);
+		for (int i = 1; i < argc; i++) {
+			printf(" %s", argv[i]);
+		}
+		printf("\n");
 	}
-	printf("\n");
 
 	// Decide which operation to perform.
 
@@ -703,18 +703,8 @@ init_nsnm_list(void)
 		g_nsnm_count++;
 
 		g_nsnm_array = (char**)realloc(g_nsnm_array,
-										g_nsnm_count * sizeof(char*));
-
-		if (g_nsnm_array == NULL) {
-			if (g_verbose) {
-				printf("Could not allocate memory for namespace name array.\n");
-			}
-
-			g_nsnm_base = NULL;
-			free(list);
-
-			return -1;
-		}
+				g_nsnm_count * sizeof(char*));
+		assert(g_nsnm_array != NULL);
 
 		g_nsnm_array[g_nsnm_count - 1] = strdup(tmp_list);
 
@@ -947,7 +937,7 @@ list_segments(as_segment_t** segments, uint32_t* n_segments, int* error)
 	for (int i = 0; i <= max_shmid; i++) {
 		as_segment_t* segment;
 
-		// Get informationabout segment.
+		// Get information about segment.
 
 		if (! stat_segment(i, &segment, error)) {
 			continue;
@@ -1073,7 +1063,7 @@ stat_segment(int shmid, as_segment_t** segment, int* error)
 		return false;
 	}
 
-	// Determine namespace from key base.
+	// Determine namespace ID from key base.
 
 	key = key & ~(0xf << AS_XMEM_INSTANCE_KEY_SHIFT);
 
@@ -1243,6 +1233,18 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 		printf("\n");
 	}
 
+	// Sanity-check backup candidate,
+
+	if (! analyze_backup_sanity(segments, base, n_stages)) {
+		if (g_verbose) {
+			printf("Failed backup sanity check for instance %u"
+					", namespace \'%s\' (nsid %d).\n", segments[base].inst,
+					segments[base].nsnm, segments[base].nsid);
+		}
+
+		return false;
+	}
+
 	// Determine whether to merely analyze or actually backup.
 
 	if (g_analyze) {
@@ -1379,6 +1381,91 @@ display_segments(as_segment_t* segments, uint32_t base, uint32_t n_stages)
 	// Draw the table. Frees all allocated elements.
 
 	draw_table(&table[0][0], n_stages + 3, g_crc32 ? 13 : 12);
+}
+
+// Perform a final sanity check on this backup candidate.
+
+static bool
+analyze_backup_sanity(as_segment_t* segments, uint32_t base, uint32_t n_stages)
+{
+	// Extract arena stage count from the base segment.
+
+	as_segment_t* bp = &segments[base];
+
+	if (bp->segsz < N_ARENAS_OFF + N_ARENAS_LEN) {
+		if (g_verbose) {
+			printf("Base segment %08x is too small.\n", bp->key);
+		}
+		return false;
+	}
+
+	void* memptr = shmat(bp->shmid, NULL, SHM_RDONLY);
+
+	if (memptr == (void*)-1) {
+		if (g_verbose) {
+			printf("Could not access base segment %08x.\n", bp->key);
+		}
+		return false;
+	}
+
+	// Actually read the number of stages from the base segment.
+
+	uint32_t n_arenas = *(uint32_t*)(memptr + N_ARENAS_OFF);
+
+	shmdt(memptr);
+
+	// Check that we have the full complement of segments to back up.
+
+	if (n_arenas != n_stages) {
+		if (g_verbose) {
+			printf("Wrong number of arena stages"
+					": expecting %u, found %u.\n",
+					n_arenas, n_stages);
+		}
+		return false;
+	}
+
+	// Check that the destination has no files for this namespace and instance.
+
+	DIR* dir = opendir(g_pathdir);
+
+	if (dir == NULL) {
+		return true;
+	}
+
+	struct dirent* dirent;
+	as_file_t valid_file;
+
+	bool found = false;
+	while ((dirent = readdir(dir)) != NULL) {
+		// Skip "." and ".." entries.
+
+		if (strcmp(dirent->d_name, ".") == 0 ||
+			strcmp(dirent->d_name, "..") == 0) {
+			continue;
+		}
+
+		// Validate the file name.
+
+		if (! validate_file_name(dirent->d_name, &valid_file)) {
+			continue;
+		}
+
+		// Check whether the file is for this namespace and instance.
+
+		if (valid_file.inst == g_inst && valid_file.nsid == bp->nsid) {
+			found = true;
+			if (g_verbose) {
+				printf("Found existing file \'%s/%s\' with instance %u"
+						", namespace \'%s\' (nsid %u)"
+						": cannot back up segments.\n",
+						g_pathdir, dirent->d_name, g_inst, bp->nsnm, bp->nsid);
+			}
+			continue;
+		}
+	}
+
+	return ! found;
 }
 
 // Actually back up identified segments.
@@ -1822,7 +1909,7 @@ zwrite_file(int fd, const void* buf, size_t segsz, uLong* crc)
 
 	as_cmp_t header;
 
-	header.magic = CMPHDR_MAG;
+	header.magic = CMPHDR_MAG2;
 	header.version = CMPHDR_VER;
 	header.crc32 = g_crc32_init;
 	header.segsz = segsz;
@@ -1960,7 +2047,7 @@ zwrite_file(int fd, const void* buf, size_t segsz, uLong* crc)
 
 	// Go back and write compressed file header (ALWAYS).
 
-	header.magic = CMPHDR_MAG;
+	header.magic = CMPHDR_MAG2;
 	header.version = CMPHDR_VER;
 	header.segsz = segsz;
 	header.crc32 = defstream.adler;
@@ -2073,11 +2160,12 @@ zread_file(int fd, void* buf, size_t filsz, size_t segsz, uLong* crc)
 
 	// Sanity check header.
 
-	if (header.magic != CMPHDR_MAG) {
+	if (header.magic != CMPHDR_MAG1 &&
+		header.magic != CMPHDR_MAG2) {
 		if (g_verbose) {
 			printf("Compressed file header bad magic number:"
 					" expecting 0x%08x, found 0x%08x;",
-					CMPHDR_MAG, header.magic);
+					CMPHDR_MAG2, header.magic);
 		}
 
 		return false;
@@ -2470,6 +2558,18 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base)
 		printf("\n");
 	}
 
+	// Perform a final sanity check on this restore candidate.
+
+	if (! analyze_restore_sanity(files, base, n_stages)) {
+		if (g_verbose) {
+			printf("Failed restore sanity check for instance %u"
+					", namespace \'%s\' (nsid %d).\n", files[base].inst,
+					files[base].nsnm, files[base].nsid);
+		}
+
+		return false;
+	}
+
 	// Determine whether to analyze or actually restore.
 
 	if (g_analyze) {
@@ -2585,6 +2685,137 @@ display_files(as_file_t* files, uint32_t base, uint32_t n_stages)
 	// Draw the table. All allocated entries will be freed.
 
 	draw_table(&table[0][0], n_stages + 3, 11);
+}
+
+static bool
+analyze_restore_sanity(as_file_t* files, uint32_t base, uint32_t n_stages)
+{
+	// Check that the number of stages is valid.
+
+	as_file_t* bp = &files[base];
+
+	char pathname[PATH_MAX + 1];
+
+	sprintf(pathname, "%s/%08x%s", g_pathdir, bp->key, FILE_EXTENSION);
+
+	// Extract arena stage count name from file.
+
+	int rc = open(pathname, O_RDONLY, DEFAULT_MODE);
+	if (rc < 0) {
+		if (g_verbose) {
+			printf("Could not extract number of arena stages from base segment"
+					" file \'%s\'.\n", pathname);
+		}
+		return false;
+	}
+
+	int fd = rc;
+
+	if (lseek(fd, (off_t)N_ARENAS_OFF, SEEK_SET) != (off_t)N_ARENAS_OFF) {
+		close(fd);
+		if (g_verbose) {
+			printf("Could not extract number of arena stages from base segment"
+					" file \'%s\'.\n", pathname);
+		}
+		return false;
+	}
+
+	// Read the namespace name.
+
+	union {
+		uint32_t n_arenas;
+		uint8_t  bytes[sizeof(uint32_t)];
+	} u;
+
+	if (read(fd, (void*)u.bytes, N_ARENAS_LEN) != N_ARENAS_LEN) {
+		close(fd);
+		if (g_verbose) {
+			printf("Could not extract number of arena stages from base segment"
+					" file \'%s\'.\n", pathname);
+		}
+		return false;
+	}
+
+	close(fd);
+
+	if (u.n_arenas != n_stages) {
+		if (g_verbose) {
+			printf("Incorrect number of arena stages found"
+					": expecting %u, found %u.\n", u.n_arenas, n_stages);
+		}
+		return false;
+	}
+
+	// Check that there are no segments with the sane namespace and instance.
+	// Get info on all shared memory segments..
+
+	struct shmid_ds dummy; // Dummy, needed by shmctl(3).
+
+	rc = shmctl(0, SHM_INFO, &dummy);
+
+	if (rc < 0) {
+		if (g_verbose) {
+			printf("Could not enumerate shared memory segments.\n");
+		}
+		return false;
+	}
+
+	int max_shmid = rc; // Range of shmids: 0..max_shmid (inclusive).
+
+	// Try each shmid in the range. Some may correspond to segments.
+
+	bool found = false;
+	for (int i = 0; i <= max_shmid; i++) {
+		// Get information about segment.
+
+		struct shmid_ds ds;
+
+		if (shmctl(i, SHM_STAT, &ds) == -1) {
+			continue;
+		}
+
+		// Extract key from shmid_ds structure.
+
+		key_t key = ds.shm_perm.__key;
+
+		// Check if this is an Aerospike key.
+
+		if ((key & AS_XMEM_KEY_BASE) != AS_XMEM_KEY_BASE) {
+			continue;
+		}
+
+		// Found a valid Aerospike database segment; create segment entry.
+		// Extract the base from the key.
+
+		key = key & ~AS_XMEM_KEY_BASE;
+
+		// Determine instance from key base.
+
+		uint32_t inst = (uint32_t)key >> AS_XMEM_INSTANCE_KEY_SHIFT;
+
+		// Determine namespace ID from key base.
+
+		key = key & ~(0xf << AS_XMEM_INSTANCE_KEY_SHIFT);
+
+		uint32_t nsid =
+			(uint32_t)(key & (0xff << AS_XMEM_NS_KEY_SHIFT)) >>
+					AS_XMEM_NS_KEY_SHIFT;
+
+		// Check whether instance and namespace match.
+
+		if (nsid == bp->nsid && inst == bp->inst) {
+			if (g_verbose) {
+				printf("Found existing shared memory segment %08x with"
+						" instance %u, namespace \'%s\' (nsid %u)"
+						": cannot restore segments.\n",
+						ds.shm_perm.__key, inst, bp->nsnm, nsid);
+			}
+			found = true;
+			continue;
+		}
+	}
+
+	return ! found;
 }
 
 // Actually restore candidate set of segment files.
@@ -2955,6 +3186,7 @@ validate_file_name(const char* pathname, as_file_t* file)
 	// Done.
 
 	free(old_ptr);
+
 	return true;
 }
 
@@ -3111,7 +3343,8 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 
 				// Sanity check header.
 
-				if (header.magic != CMPHDR_MAG) {
+				if (header.magic != CMPHDR_MAG1 &&
+					header.magic != CMPHDR_MAG2) {
 					assert(valid_file.nsnm == NULL);
 					continue;
 				}
