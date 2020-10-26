@@ -1465,6 +1465,8 @@ analyze_backup_sanity(as_segment_t* segments, uint32_t base, uint32_t n_stages)
 		}
 	}
 
+	closedir(dir);
+
 	return ! found;
 }
 
