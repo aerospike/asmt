@@ -499,7 +499,6 @@ main(int argc, char* argv[])
 
 			if (! analyze()) {
 				success = false;
-				break;
 			}
 		}
 
