@@ -503,7 +503,7 @@ main(int argc, char* argv[])
 			}
 		}
 
-		if (count != g_nsnm_count) {
+		if (success && count != g_nsnm_count) {
 			if (g_verbose) {
 				printf("\nInvalid namespace names provided.\n");
 			}
