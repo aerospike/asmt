@@ -24,20 +24,25 @@ CFLAGS += -D_GNU_SOURCE -MMD
 LDFLAGS = $(CFLAGS)
 INCLUDES = -Isrc -I/usr/include
 LIBRARIES = -lpthread -lrt -lz
+COMMIT = $(shell git describe --always)
 
 default: all
 
 all: asmt
 
-target_dir:
-	/bin/mkdir -p $(DIR_BIN) $(OBJ_DIRS)
+$(SRC_DIRS)/commit.h:
+	@echo 'static const char g_commit[] = "$(COMMIT)";' > $(SRC_DIRS)/commit.h
 
-asmt: target_dir $(ASMT_OBJECTS)
+target_dir:
+	@/bin/mkdir -p $(DIR_BIN) $(OBJ_DIRS)
+
+asmt: target_dir $(SRC_DIRS)/commit.h $(ASMT_OBJECTS)
 	@echo "Linking $@"
 	$(CC) $(LDFLAGS) -o $(ASMT_BINARY) $(ASMT_OBJECTS) $(LIBRARIES)
 
 # For now we only clean everything.
 clean:
+	/bin/rm -f $(SRC_DIRS)/commit.h
 	/bin/rm -rf $(DIR_TARGET)
 
 -include $(ALL_DEPENDENCIES)
@@ -45,3 +50,4 @@ clean:
 $(DIR_OBJ)/%.o: %.c
 	@echo "Building $@"
 	$(CC) $(CFLAGS) -o $@ -c $(INCLUDES) $<
+

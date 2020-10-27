@@ -46,6 +46,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include "commit.h"
 #include "hardware.h"
 
 #include "warnings.h"
@@ -409,7 +410,7 @@ main(int argc, char* argv[])
 	// If we haven't printed usage (and verbose), print copyright info.
 
 	if (g_verbose) {
-		printf("%s, %s\n", g_fullname, g_version);
+		printf("%s, %s-%s\n", g_fullname, g_version, g_commit);
 		printf("%s %s\n", g_copyright, g_all_rights);
 		printf("\n");
 	}
