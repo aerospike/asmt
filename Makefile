@@ -18,6 +18,8 @@ ASMT_BINARY = $(DIR_BIN)/asmt
 ALL_OBJECTS = $(ASMT_OBJECTS)
 ALL_DEPENDENCIES = $(ALL_OBJECTS:%.o=%.d)
 
+COMMIT_H = src/commit.h
+
 CC = gcc
 CFLAGS = -g -fno-common -std=gnu99 -D_REENTRANT -D_FILE_OFFSET_BITS=64 -Wall
 CFLAGS += -D_GNU_SOURCE -MMD
@@ -30,19 +32,20 @@ default: all
 
 all: asmt
 
-$(SRC_DIRS)/commit.h:
-	@echo 'static const char g_commit[] = "$(COMMIT)";' > $(SRC_DIRS)/commit.h
+$(COMMIT_H):
+	echo 'static const char g_commit[] = "$(COMMIT)";' > $(COMMIT_H)
 
 target_dir:
 	@/bin/mkdir -p $(DIR_BIN) $(OBJ_DIRS)
 
-asmt: target_dir $(SRC_DIRS)/commit.h $(ASMT_OBJECTS)
+asmt: target_dir $(COMMIT_H) $(ASMT_OBJECTS)
 	@echo "Linking $@"
 	$(CC) $(LDFLAGS) -o $(ASMT_BINARY) $(ASMT_OBJECTS) $(LIBRARIES)
+	rm -f $(COMMIT_H)
 
 # For now we only clean everything.
 clean:
-	/bin/rm -f $(SRC_DIRS)/commit.h
+	/bin/rm -f $(COMMIT_H)
 	/bin/rm -rf $(DIR_TARGET)
 
 -include $(ALL_DEPENDENCIES)
