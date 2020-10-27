@@ -26,7 +26,7 @@ CFLAGS += -D_GNU_SOURCE -MMD
 LDFLAGS = $(CFLAGS)
 INCLUDES = -Isrc -I/usr/include
 LIBRARIES = -lpthread -lrt -lz
-COMMIT = $(shell git describe --always)
+COMMIT = $(shell git describe --always 2>/dev/null)
 
 default: all
 
