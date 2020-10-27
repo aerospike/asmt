@@ -534,8 +534,12 @@ main(int argc, char* argv[])
 static void
 usage(bool verbose)
 {
-	printf("%s, %s\n", g_fullname, g_version);
-	printf("%s\n", g_copyright);
+	printf("%s, %s", g_fullname, g_version);
+	if (strcmp(g_commit, "") != 0) {
+		printf("-%s\n", g_commit);
+	}
+	printf("\n");
+	printf("%s %s\n", g_copyright, g_all_rights);
 	printf("\n");
 
 	char first_str[MAX_BUFFER];
