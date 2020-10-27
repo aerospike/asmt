@@ -165,14 +165,19 @@ enum { MIN_ARENA = 0x100	};	// Minimum acceptable value.
 enum { MAX_ARENA = 0x1FF	};	// Maximum acceptable value.
 enum { INV_ARENA = 0xffff	};	// Any unacceptable value.
 
+enum { BASEVER_OFF = 0		};	// Offset of version in base segment.
+enum { BASEVER_LEN = sizeof(uint32_t)	}; // Size of version in base segment.
+enum { BASEVER_MIN = 10 	};	// Minimum acceptable version of base segment,
+enum { BASEVER_MAX = 10		};	// Maximum acceptable version of base segment.
+
 enum { NAMESPACE_OFF = 1024	};	// Offset of namespace in base segment.
 enum { NAMESPACE_LEN = 32	};	// Length of namespace name.
 
 enum { N_ARENAS_OFF = 2152	};	// Offset of n_arenas in base segment.
-enum { N_ARENAS_LEN = sizeof(uint32_t) }; // Length of n_arenas field.
+enum { N_ARENAS_LEN = sizeof(uint32_t)	}; // Length of n_arenas field.
 
 enum { CMPHDR_OFF = 0		};	// Offset of header in compressed file.
-enum { CMPHDR_LEN = sizeof(as_cmp_t) }; // Length of header in compressed file.
+enum { CMPHDR_LEN = sizeof(as_cmp_t)	}; // Length of header in compressed file.
 enum { CMPHDR_MAG1 = 0X41534D54 }; // asmt magic number ('TMSA' in ASCII).
 enum { CMPHDR_MAG2 = 0X544D5341 }; // asmt magic number ('ASMT' in ASCII).
 enum { CMPHDR_VER = 1 		};	// asmt header current version
@@ -1403,6 +1408,20 @@ analyze_backup_sanity(as_segment_t* segments, uint32_t base, uint32_t n_stages)
 	if (memptr == (void*)-1) {
 		if (g_verbose) {
 			printf("Could not access base segment %08x.\n", bp->key);
+		}
+		return false;
+	}
+
+	// Check the base segment version number.
+
+	uint32_t base_ver = *(uint32_t*)(memptr + BASEVER_OFF);
+
+	if (base_ver < BASEVER_MIN || base_ver > BASEVER_MAX) {
+		if (g_verbose) {
+			printf("Invalid version number in base segment %08x"
+					": expecting version in range %u to %u"
+					", found version %u.\n", bp->key,
+					BASEVER_MIN, BASEVER_MAX, base_ver);
 		}
 		return false;
 	}
@@ -2712,6 +2731,48 @@ analyze_restore_sanity(as_file_t* files, uint32_t base, uint32_t n_stages)
 
 	int fd = rc;
 
+	// Check the base segment version number.
+
+	if (lseek(fd, (off_t)BASEVER_OFF, SEEK_SET) != (off_t)BASEVER_OFF) {
+		close(fd);
+		if (g_verbose) {
+			printf("Could not extract version number from base segment"
+					" file \'%s\'.\n", pathname);
+		}
+		return false;
+	}
+
+	// Read the version number from base segment file.
+
+	union {
+		uint32_t base_ver;
+		uint8_t  bytes[sizeof(uint32_t)];
+	} u1;
+
+	if (read(fd, (void*)u1.bytes, BASEVER_LEN) != BASEVER_LEN) {
+		close(fd);
+		if (g_verbose) {
+			printf("Could not extract version number from base segment"
+					" file \'%s\'.\n", pathname);
+		}
+		return false;
+	}
+
+	// Check version number.
+
+	if (u1.base_ver < BASEVER_MIN || u1.base_ver > BASEVER_MAX) {
+		close(fd);
+		if (g_verbose) {
+			printf("Invalid version number in base segment file \'%s\'"
+					": expecting version in range %u to %u"
+					", found version %u.\n", pathname,
+					BASEVER_MIN, BASEVER_MAX, u1.base_ver);
+		}
+		return false;
+	}
+
+	// Read the number of arena stages from the base segment file.
+
 	if (lseek(fd, (off_t)N_ARENAS_OFF, SEEK_SET) != (off_t)N_ARENAS_OFF) {
 		close(fd);
 		if (g_verbose) {
@@ -2726,9 +2787,9 @@ analyze_restore_sanity(as_file_t* files, uint32_t base, uint32_t n_stages)
 	union {
 		uint32_t n_arenas;
 		uint8_t  bytes[sizeof(uint32_t)];
-	} u;
+	} u2;
 
-	if (read(fd, (void*)u.bytes, N_ARENAS_LEN) != N_ARENAS_LEN) {
+	if (read(fd, (void*)u2.bytes, N_ARENAS_LEN) != N_ARENAS_LEN) {
 		close(fd);
 		if (g_verbose) {
 			printf("Could not extract number of arena stages from base segment"
@@ -2739,10 +2800,10 @@ analyze_restore_sanity(as_file_t* files, uint32_t base, uint32_t n_stages)
 
 	close(fd);
 
-	if (u.n_arenas != n_stages) {
+	if (u2.n_arenas != n_stages) {
 		if (g_verbose) {
 			printf("Incorrect number of arena stages found"
-					": expecting %u, found %u.\n", u.n_arenas, n_stages);
+					": expecting %u, found %u.\n", u2.n_arenas, n_stages);
 		}
 		return false;
 	}
