@@ -506,7 +506,7 @@ main(int argc, char* argv[])
 		}
 
 		if (success && count != g_nsnm_count) {
-			printf("\nInvalid namespace names provided.\n");
+			printf("\nInvalid namespace name(s) provided.\n");
 		}
 	}
 
