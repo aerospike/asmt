@@ -21,7 +21,7 @@ ALL_DEPENDENCIES = $(ALL_OBJECTS:%.o=%.d)
 COMMIT_H = src/commit.h
 
 CC = gcc
-CFLAGS = -g -fno-common -std=gnu99 -D_REENTRANT -D_FILE_OFFSET_BITS=64 -Wall -Wextra
+CFLAGS = -g -fno-common -std=gnu99 -D_REENTRANT -D_FILE_OFFSET_BITS=64 -Wall -Wextra -O3
 CFLAGS += -D_GNU_SOURCE -MMD
 LDFLAGS = $(CFLAGS)
 INCLUDES = -Isrc -I/usr/include
