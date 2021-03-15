@@ -3367,7 +3367,6 @@ draw_table(char** table, uint32_t n_rows, uint32_t n_cols)
 
 // Sets a NUL-terminated character string with a fixed length.
 // "dashes" parameter used to substitute dashes for string characters.
-// Note: Uses a statically-allocated buffer; should not be freed.
 
 static char*
 strfmt_width(char* string, uint32_t width, uint32_t n_blanks, bool dashes)
