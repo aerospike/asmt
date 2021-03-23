@@ -18,34 +18,26 @@ ASMT_BINARY = $(DIR_BIN)/asmt
 ALL_OBJECTS = $(ASMT_OBJECTS)
 ALL_DEPENDENCIES = $(ALL_OBJECTS:%.o=%.d)
 
-COMMIT_H = src/commit.h
-
 CC = gcc
 CFLAGS = -g -fno-common -std=gnu99 -D_REENTRANT -D_FILE_OFFSET_BITS=64 -Wall -Wextra -O3
 CFLAGS += -D_GNU_SOURCE -MMD
 LDFLAGS = $(CFLAGS)
 INCLUDES = -Isrc -I/usr/include
 LIBRARIES = -lpthread -lrt -lz
-COMMIT = $(shell git describe --always 2>/dev/null)
 
 default: all
 
 all: asmt
 
-$(COMMIT_H):
-	@echo 'static const char g_commit[] = "$(COMMIT)";' > $(COMMIT_H)
-
 target_dir:
 	@/bin/mkdir -p $(DIR_BIN) $(OBJ_DIRS)
 
-asmt: target_dir $(COMMIT_H) $(ASMT_OBJECTS)
+asmt: target_dir $(ASMT_OBJECTS)
 	@echo "Linking $(ASMT_BINARY)"
 	$(CC) $(LDFLAGS) -o $(ASMT_BINARY) $(ASMT_OBJECTS) $(LIBRARIES)
-	@rm -f $(COMMIT_H)
 
 # For now we only clean everything.
 clean:
-	/bin/rm -f $(COMMIT_H)
 	/bin/rm -rf $(DIR_TARGET)
 
 -include $(ALL_DEPENDENCIES)
