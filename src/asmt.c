@@ -127,7 +127,7 @@ typedef struct as_cmp_s {
 // Constant globals.
 
 static const char g_fullname[] =	"Aerospike Shared Memory Tool";
-static const char g_version[] =		"Version 1.0";
+static const char g_version[] =		"Version 0.9";
 static const char g_copyright[] =	"Copyright (C) 2021 Aerospike, Inc.";
 static const char g_all_rights[] =	"All rights reserved.";
 
