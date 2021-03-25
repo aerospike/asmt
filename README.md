@@ -3,8 +3,8 @@
 ### Overview
 ------------
 
-ASMT provides a program for backing up or restoring an Aerospike Database's
-primary index.
+ASMT provides a program for backing up and restoring the primary index
+of an Aerospike Database Enterpise Edition (EE).
 
 After an Aerospike Database server node has been shut down cleanly, ASMT may
 be used to save the server node's primary index from shared memory to files in
@@ -13,39 +13,32 @@ which ASMT can be used to restore the index from the file system to shared
 memory. This in turn enables the Aerospike Database server to fast restart,
 even though it was rebooted.
 
-Note - ASMT cannot be used while the Aerospike Database server is running.
+**Note** ASMT cannot be used while the Aerospike Database server is running.
 
 #### License
 ------------
 
-ASMT is supplied under an Apache 2.0 license. Please see LICENSE-2.0.txt, in
-the same directory as this README.md file.
+ASMT is supplied under an [Apache 2.0 license](LICENSE-2.0.txt).
 
 #### What ASMT Does
 -------------------
 
-ASMT is a shared memory tool that can be used to backup and restore Aerospike
-Database's primary index, which is stored in shared memory when Aerospike
-Database is shit down cleanly. With ASMT, shared memory segments corresponding
-to an Aerospike Database primary index can be backed up (copied from shared
+With ASMT, shared memory segments corresponding
+to an Aerospike Database primary index are backed up (copied from shared
 memory to files in the file system) and restored (copied from files in the file
 system to shared memory).
 
-Once ASMT has been used to copy the primary index to the file system, the system
-on which Aerospike Database was running may be rebooted. After the system has
-restarted, ASMT may be used to copy the primary index from the file system to
-shared memory.
-
-Once the primary index has been copied to shared memory, Aerospike Database may
-then be restarted, in which case Aerospike Database will find the primary index
-in shared memory and can avoid reconstructing it. Reconstructing the primary
-index without reading it from shared memory requires scanning all of the records
-in the database, which can be time-consuming.
+Once the primary index has been copied to shared memory by ASMT,
+the Aerospike Database node may be restarted, in which case Aerospike Database
+will find the primary index in shared memory and avoid reconstructing it.
+Reconstructing the primary index without reading it from shared memory requires
+scanning all of the records in the database, which can be time-consuming
+(a [cold start](https://www.aerospike.com/docs/operations/manage/aerospike/cold_start/index.html)).
 
 ### Getting Started
 --------------------
 
-**Download the ASMT package through git:**
+**Download the ASMT package using git:**
 
 ```
 $ git clone https://github.com/aerospike/asmt.git
@@ -82,7 +75,7 @@ This will create a binary in a target/bin directory: target/bin/asmt
 #### Using ASMT
 ---------------
 
-Copy (as executable) the asmt binary to wherever is most convenient on the
+Copy the asmt binary (as an executable) to wherever is most convenient on the
 relevant Aerospike Database server node, and change to that directory.
 
 After checking that the server node is not running, run the asmt binary to
