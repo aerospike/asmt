@@ -1,0 +1,12 @@
+name: asmt
+
+container:
+  - base:
+      - docker.qe.aerospike.com/build/aerospike-tools-alt:centos-7
+
+build:
+  - name: default
+    script:
+      - make
+    artifact:
+      - target/bin/*
