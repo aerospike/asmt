@@ -4,20 +4,20 @@ ASMT provides a program for backing up and restoring the primary index
 of an Aerospike Database Enterpise Edition (EE).
 
 * [Overview](#overview)
- * [What Does ASMT Do?](#what-does-asmt-do)
+  * [What Does ASMT Do?](#what-does-asmt-do)
 * [Building from Source](#building-from-source)
- * [Getting Started](#getting-started)
-   * [Clone the Repo](#clone-the-repo)
-   * [Download the Source](#download-the-source)
- * [Install the Dependencies](#install-the-dependencies)
-   * [For CentOS](#for-centos)
-   * [For Debian or Ubuntu](#for-debian-or-ubuntu)
- * [Compile](#compile)
+  * [Getting Started](#getting-started)
+    * [Clone the Repo](#clone-the-repo)
+    * [Download the Source](#download-the-source)
+  * [Install the Dependencies](#install-the-dependencies)
+    * [For CentOS](#for-centos)
+    * [For Debian or Ubuntu](#for-debian-or-ubuntu)
+  * [Compile](#compile)
 * [Using ASMT](#using-asmt)
- * [Taking a Backup of the Primary Index](#taking-a-backup-of-the-primary-index)
- * [Restoring the Primary Index from an ASMT Backup](#restoring-the-primary-index-from-an-asmt-backup)
- * [ASMT Options](#asmt-options)
- * [Common Errors](#common-errors)
+  * [Taking a Backup of the Primary Index](#taking-a-backup-of-the-primary-index)
+  * [Restoring the Primary Index from an ASMT Backup](#restoring-the-primary-index-from-an-asmt-backup)
+  * [ASMT Options](#asmt-options)
+  * [Common Errors](#common-errors)
 * [License](#license)
 
 ## Overview
@@ -26,7 +26,8 @@ After an Aerospike Database server node has been shut down cleanly, ASMT may
 be used to save the server node's primary index from shared memory to files in
 the file system. The server node (host machine) may then be rebooted, after
 which ASMT can be used to restore the index from the file system to shared
-memory. This in turn enables the Aerospike Database server to fast restart,
+memory. This in turn enables the Aerospike Database server to
+[fast restart](https://www.aerospike.com/docs/operations/manage/aerospike/fast_start/index.html),
 even though it was rebooted.
 
 **Note:** ASMT cannot be used while the Aerospike Database server is running.
@@ -46,6 +47,12 @@ scanning all of the records in the database, which can be time-consuming
 (a [cold start](https://www.aerospike.com/docs/operations/manage/aerospike/cold_start/index.html)).
 
 ## Building from Source
+
+You can use a compiled binary associated with one of the
+[releases](https://github.com/aerospike/asmt/releases). The `asmt` binary is
+statically built on CentOS 7, and should work for most x86-64 Linux distros.
+
+Alternatively you can compile `asmt` yourself.
 
 ### Getting Started
 
