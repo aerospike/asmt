@@ -276,5 +276,5 @@ ipcs | grep ^0xae | awk '{print $1}' | xargs -i sudo ipcrm -M {}
 
 ## License
 
-ASMT is supplied under an [Apache 2.0 license](LICENSE-2.0.txt).
+ASMT is supplied under an [Apache 2.0 license](LICENSE).
 
