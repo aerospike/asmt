@@ -108,6 +108,10 @@ typedef struct as_io_s {
 	size_t segsz;
 	bool compress;
 	uLong crc32;
+	int shmid;
+	uid_t uid;
+	gid_t gid;
+	mode_t mode;
 } as_io_t;
 
 // Information about a compressed file.
@@ -127,7 +131,7 @@ typedef struct as_cmp_s {
 // Constant globals.
 
 static const char g_fullname[] =	"Aerospike Shared Memory Tool";
-static const char g_version[] =		"Version 0.9";
+static const char g_version[] =		"Version 0.91";
 static const char g_copyright[] =	"Copyright (C) 2021 Aerospike, Inc.";
 static const char g_all_rights[] =	"All rights reserved.";
 
@@ -142,6 +146,7 @@ static const int AS_XMEM_INSTANCE_KEY_SHIFT = 20;
 static const int AS_XMEM_NS_KEY_SHIFT = 12;
 
 static const unsigned int DEFAULT_MODE = 0666;
+static const unsigned int MODE_MASK = 0x1ff;
 
 static const int SHMGET_FLAGS_CREATE_ONLY = IPC_CREAT | IPC_EXCL | 0666;
 
@@ -238,12 +243,12 @@ static bool backup_candidate_check_crc32(as_io_t* ios, as_segment_t* segments, u
 static void backup_candidate_cleanup(as_segment_t* segments, as_io_t* ios, uint32_t base, uint32_t idx, uint32_t step, bool remove_files);
 static bool start_io(as_io_t* ios, uint32_t n_ios);
 static void* run_io(void* args);
-static bool write_file(int fd, const void* buf, size_t segsz, bool compress, uLong* crc);
-static bool pwrite_file(int fd, const void* buf, size_t segsz, uLong* crc);
-static bool zwrite_file(int fd, const void* buf, size_t segsz, uLong* crc);
-static bool read_file(int fd, void* buf, size_t filsz, size_t segsz, bool compress, uLong* crc);
-static bool pread_file(int fd, void* buf, size_t segsz, uLong* crc);
-static bool zread_file(int fd, void* buf, size_t filsz, size_t segsz, uLong* crc);
+static bool write_file(int fd, const void* buf, size_t segsz, mode_t mode, uid_t uid, gid_t gid, bool compress, uLong* crc);
+static bool pwrite_file(int fd, const void* buf, size_t segsz, mode_t mode, uid_t uid, gid_t gid, uLong* crc);
+static bool zwrite_file(int fd, const void* buf, size_t segsz, mode_t mode, uid_t uid, gid_t gid, uLong* crc);
+static bool read_file(int fd, void* buf, size_t filsz, size_t segsz, int shmid, mode_t mode, uid_t uid, gid_t gid, bool compress, uLong* crc);
+static bool pread_file(int fd, void* buf, size_t segsz, int shmid, mode_t mode, uid_t uid, gid_t gid, uLong* crc);
+static bool zread_file(int fd, void* buf, size_t filsz, size_t segsz, int shmid, mode_t mode, uid_t uid, gid_t gid, uLong* crc);
 static bool analyze_restore(void);
 static bool analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base);
 static bool analyze_restore_sanity(as_file_t* files, uint32_t base, uint32_t n_stages);
@@ -400,8 +405,11 @@ main(int argc, char* argv[])
 	// Try to become uid 0, gid 0.
 
 	if (setuid(0) != 0 || setgid(0) != 0) {
+		char errbuff[MAX_BUFFER];
+		char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
+
 		printf("Must operate as uid 0, gid 0: error was %d: %s.\n\n",
-				errno, strerror(errno));
+				errno, errout);
 		usage(false);
 		exit(EXIT_FAILURE);
 	}
@@ -782,7 +790,10 @@ analyze_backup(void)
 			printf(", namespace \'%s\'", g_nsnm);
 		}
 		if (error != 0) {
-			printf(": error was %d: %s", error, strerror(error));
+			char errbuff[MAX_BUFFER];
+			char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
+
+			printf(": error was %d: %s", error, errout);
 		}
 		printf(".\n");
 
@@ -1510,9 +1521,12 @@ backup_candidate_file(as_segment_t* segments, as_io_t* ios,
 	void* memptr = shmat(segment->shmid, NULL, SHM_RDONLY);
 
 	if (memptr == (void*)-1) {
+		char errbuff[MAX_BUFFER];
+		char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
+
 		printf("Could not attach segment %08x"
 				": error was %d: %s.\n", segment->key,
-				errno, strerror(errno));
+				errno, errout);
 
 		// Clean up all intermediate operations.
 
@@ -1527,6 +1541,9 @@ backup_candidate_file(as_segment_t* segments, as_io_t* ios,
 	io->memptr = memptr;
 	io->filsz = 0;
 	io->segsz = segment->segsz;
+	io->mode = segment->mode;
+	io->uid = segment->uid;
+	io->gid = segment->gid;
 	io->crc32 = g_crc32_init;
 
 	// Construct the filename extension.
@@ -1550,12 +1567,15 @@ backup_candidate_file(as_segment_t* segments, as_io_t* ios,
 
 	// Open (create) the segment file.
 
-	int rc = open(pathname, O_CREAT | O_RDWR | O_EXCL, DEFAULT_MODE);
+	int rc = open(pathname, O_CREAT | O_RDWR | O_EXCL, io->mode);
 
 	if (rc < 0) {
+		char errbuff[MAX_BUFFER];
+		char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
+
 		printf("Could not create segment file \'%s\'"
 				": error was %d: %s.\n",
-				pathname, errno, strerror(errno));
+				pathname, errno, errout);
 
 		// Clean up all intermediate operations.
 
@@ -1576,9 +1596,11 @@ backup_candidate_file(as_segment_t* segments, as_io_t* ios,
 		rc = posix_fallocate(io->fd, 0, (off_t)segment->segsz);
 
 		if (rc < 0) {
+			char errbuff[MAX_BUFFER];
+			char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
+
 			printf("Could not allocate storage for segment file \'%s\'"
-					": error was %d: %s.\n",
-					pathname, errno, strerror(errno));
+					": error was %d: %s.\n", pathname, errno, errout);
 
 			// Clean up all intermediate operations.
 
@@ -1790,13 +1812,14 @@ run_io(void* args)
 		bool success;
 
 		if (io->write) {
-			success = write_file(io->fd, io->memptr, io->segsz, io->compress,
-					&io->crc32);
-			fsync(io->fd); // Ignore return code.
+			success = write_file(io->fd, io->memptr, io->segsz, io->mode,
+					io->uid, io->gid, io->compress, &io->crc32);
+			(void)fsync(io->fd);
 		}
 		else {
 			success = read_file(io->fd, io->memptr, io->filsz, io->segsz,
-					io->compress, &io->crc32);
+					io->shmid, io->mode, io->uid, io->gid, io->compress,
+					&io->crc32);
 		}
 
 		// If this request failed, stop the other threads.
@@ -1851,20 +1874,22 @@ run_io(void* args)
 // Write a complete file (compressed if requested). Compute crc32 if requested.
 
 static bool
-write_file(int fd, const void* buf, size_t segsz, bool compress, uLong* crc)
+write_file(int fd, const void* buf, size_t segsz, mode_t mode, uid_t uid,
+		gid_t gid, bool compress, uLong* crc)
 {
 	if (compress) {
-		return zwrite_file(fd, buf, segsz, crc);
+		return zwrite_file(fd, buf, segsz, mode, uid, gid, crc);
 	}
 	else {
-		return pwrite_file(fd, buf, segsz, crc);
+		return pwrite_file(fd, buf, segsz, mode, uid, gid, crc);
 	}
 }
 
 // Write a complete file (compressed). Retrieve crc32 if requested.
 
 static bool
-zwrite_file(int fd, const void* buf, size_t segsz, uLong* crc)
+zwrite_file(int fd, const void* buf, size_t segsz, mode_t mode, uid_t uid,
+		gid_t gid, uLong* crc)
 {
 	// Set up and write initial compressed file header.
 
@@ -1994,13 +2019,38 @@ zwrite_file(int fd, const void* buf, size_t segsz, uLong* crc)
 		return false;
 	}
 
+	// Set file ownership.
+
+	if (fchown(fd, uid, gid) == -1) {
+		char errbuff[MAX_BUFFER];
+		char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
+
+		printf("Unable to set uid or gid for file"
+				": error was %d: %s\n", errno, errout);
+
+		return false;
+	}
+
+	// Set file mode.
+
+	if (fchmod(fd, mode) == -1) {
+		char errbuff[MAX_BUFFER];
+		char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
+
+		printf("Unable to set mode for file"
+				": error was %d: %s\n", errno, errout);
+
+		return false;
+	}
+
 	return true;
 }
 
 // Write a complete file (uncompressed). Compute crc32 if requested.
 
 static bool
-pwrite_file(int fd, const void* buf, size_t segsz, uLong* crc)
+pwrite_file(int fd, const void* buf, size_t segsz, mode_t mode, uid_t uid,
+		gid_t gid, uLong* crc)
 {
 	// newsize is running size, as pwrite(2) progresses.
 
@@ -2040,27 +2090,52 @@ pwrite_file(int fd, const void* buf, size_t segsz, uLong* crc)
 		*crc = crc32(*crc, buf, (uInt)result);
 	}
 
+	// Set file ownership.
+
+	if (fchown(fd, uid, gid) == -1) {
+		char errbuff[MAX_BUFFER];
+		char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
+
+		printf("Unable to set uid or gid for file"
+				": error was %d: %s\n", errno, errout);
+
+		return false;
+	}
+
+	// Set file mode.
+
+	if (fchmod(fd, mode) == -1) {
+		char errbuff[MAX_BUFFER];
+		char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
+
+		printf("Unable to set mode for file"
+				": error was %d: %s\n", errno, errout);
+
+		return false;
+	}
+
 	return true;
 }
 
 // Read a complete file (compressed if requested). Compute crc32 if requested.
 
 static bool
-read_file(int fd, void* buf, size_t filsz, size_t segsz, bool compress,
-		uLong* crc)
+read_file(int fd, void* buf, size_t filsz, size_t segsz, int shmid, mode_t mode,
+		uid_t uid, gid_t gid, bool compress, uLong* crc)
 {
 	if (compress) {
-		return zread_file(fd, buf, filsz, segsz, crc);
+		return zread_file(fd, buf, filsz, segsz, shmid, mode, uid, gid, crc);
 	}
 	else {
-		return pread_file(fd, buf, segsz, crc);
+		return pread_file(fd, buf, segsz, shmid, mode, uid, gid, crc);
 	}
 }
 
 // Read a complete file (compressed). Compute crc32 if requested.
 
 static bool
-zread_file(int fd, void* buf, size_t filsz, size_t segsz, uLong* crc)
+zread_file(int fd, void* buf, size_t filsz, size_t segsz, int shmid,
+		mode_t mode, uid_t uid, gid_t gid, uLong* crc)
 {
 	(void)filsz;
 
@@ -2221,13 +2296,32 @@ zread_file(int fd, void* buf, size_t filsz, size_t segsz, uLong* crc)
 
 	*crc = g_crc32 ? infstream.adler : g_crc32_init;
 
-	return ret == Z_STREAM_END || ret == Z_OK ? true : false;
+	// Set segment ownership
+
+	struct shmid_ds shmid_ds = {
+			.shm_perm.uid = uid,
+			.shm_perm.gid = gid,
+			.shm_perm.mode = (int)(mode & MODE_MASK),
+	};
+
+	if (shmctl(shmid, IPC_SET, &shmid_ds) == -1) {
+		char errbuff[MAX_BUFFER];
+		char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
+
+		printf("Unable to set uid, gid, or mode for shared memory segment"
+				": error was %d: %s\n", errno, errout);
+
+		return false;
+	}
+
+	return (ret == Z_STREAM_END || ret == Z_OK) ? true : false;
 }
 
 // Read a complete file (uncompressed). Compute crc32 if requested.
 
 static bool
-pread_file(int fd, void* buf, size_t segsz, uLong* crc)
+pread_file(int fd, void* buf, size_t segsz, int shmid, mode_t mode, uid_t uid,
+		gid_t gid, uLong* crc)
 {
 	// newsize is running size, as pread(2) progresses.
 
@@ -2235,34 +2329,54 @@ pread_file(int fd, void* buf, size_t segsz, uLong* crc)
 
 	// result is result of individual pread(2) operation.
 
-	ssize_t result;
+	ssize_t bytes_read;
 
 	// Initially, offset is start of segment / segment file.
 
 	off_t offset = 0;
 
-	while ((result = pread(fd, buf, (size_t)newsize, offset)) != newsize) {
-		if (result <= 0) {
+	while ((bytes_read = pread(fd, buf, (size_t)newsize, offset)) != newsize) {
+		if (bytes_read <= 0) {
 			return false;
 		}
 
 		// Should we compute crc32? If so, apply to this chunk.
 
 		if (g_crc32) {
-			*crc = crc32(*crc, buf, (uInt)result);
+			*crc = crc32(*crc, buf, (uInt)bytes_read);
 		}
 
 		// If only partial read, set up next chunk.
 
-		buf += result;
-		offset += result;
-		newsize -= result;
+		buf += bytes_read;
+		offset += bytes_read;
+		newsize -= bytes_read;
 	}
 
-	// Finish crc32 computation on last chunk, if incomplete.
+	if (bytes_read > 0) {
+		// Finish crc32 computation on last chunk, if incomplete.
 
-	if (result > 0 && g_crc32) {
-		*crc = crc32(*crc, buf, (uInt)result);
+		if (g_crc32) {
+			*crc = crc32(*crc, buf, (uInt)bytes_read);
+		}
+
+		// Set segment ownership.
+
+		struct shmid_ds shmid_ds = {
+				.shm_perm.uid = uid,
+				.shm_perm.gid = gid,
+				.shm_perm.mode = (int)(mode & MODE_MASK),
+		};
+
+		if (shmctl(shmid, IPC_SET, &shmid_ds) == -1) {
+			char errbuff[MAX_BUFFER];
+			char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
+
+			printf("Unable to set uid, gid, or mode for shared memory segment"
+					": error was %d: %s\n", errno, errout);
+
+			return false;
+		}
 	}
 
 	return true;
@@ -2301,7 +2415,10 @@ analyze_restore(void)
 			printf(", namespace \'%s\'", g_nsnm);
 		}
 		if (error != 0) {
-			printf(": error was %d: %s", error, strerror(error));
+			char errbuff[MAX_BUFFER];
+			char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
+
+			printf(": error was %d: %s", error, errout);
 		}
 		printf(".\n");
 
@@ -2576,7 +2693,7 @@ analyze_restore_sanity(as_file_t* files, uint32_t base, uint32_t n_stages)
 
 	// Extract arena stage count name from file.
 
-	int rc = open(pathname, O_RDONLY, DEFAULT_MODE);
+	int rc = open(pathname, O_RDONLY);
 	if (rc < 0) {
 		printf("Could not extract number of arena stages from base segment"
 				" file \'%s\'.\n", pathname);
@@ -2782,9 +2899,11 @@ restore_candidate_segment(as_file_t* files, as_io_t* ios, int* shmids,
 
 	if (*shmidp < 0) {
 		int error = (errno == ENOENT) ? EEXIST : errno;
+		char errbuff[MAX_BUFFER];
+		char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
 
 		printf("Could not create segment with key %08x"
-				": error was %d: %s.\n", file->key, error, strerror(error));
+				": error was %d: %s.\n", file->key, error, errout);
 
 		// Clean up all intermediate operations.
 
@@ -2801,9 +2920,12 @@ restore_candidate_segment(as_file_t* files, as_io_t* ios, int* shmids,
 	// Can not operate on segments that are in use.
 
 	if (memptr == (void*)-1) {
+		char errbuff[MAX_BUFFER];
+		char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
+
 		printf("Could not attach segment %08x"
 				": error was %d: %s.\n", file->key,
-				errno, strerror(errno));
+				errno, errout);
 
 		// Clean up all intermediate operations.
 
@@ -2818,6 +2940,10 @@ restore_candidate_segment(as_file_t* files, as_io_t* ios, int* shmids,
 	io->memptr = memptr;
 	io->filsz = file->filsz;
 	io->segsz = file->segsz;
+	io->shmid = *shmidp;
+	io->mode = file->mode;
+	io->uid = file->uid;
+	io->gid = file->gid;
 	io->crc32 = g_crc32_init;
 	io->compress = file->compress;
 
@@ -2832,12 +2958,15 @@ restore_candidate_segment(as_file_t* files, as_io_t* ios, int* shmids,
 
 	// Open the segment file (for reading).
 
-	int rc = open(pathname, O_RDONLY, DEFAULT_MODE);
+	int rc = open(pathname, O_RDONLY);
 
 	if (rc < 0) {
+		char errbuff[MAX_BUFFER];
+		char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
+
 		printf("Could not open segment file \'%s\'"
 				": error was %d: %s.\n",
-				pathname, errno, strerror(errno));
+				pathname, errno, errout);
 
 		// Clean up all intermediate operations.
 
@@ -3089,8 +3218,11 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 
 	if (dir == NULL) {
 		*error = errno;
+		char errbuff[MAX_BUFFER];
+		char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
+
 		printf("Cannot open directory \'%s\': error was %d: %s.\n",
-				g_pathdir, *error, strerror(*error));
+				g_pathdir, *error, errout);
 		return false;
 	}
 
@@ -3123,9 +3255,12 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 		// Get status of file.
 
 		if (stat(pathname, &statbuf) < 0) {
+			char errbuff[MAX_BUFFER];
+			char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
+
 			printf("Did not find info for Aerospike database segment"
 					" file \'%s\': error was %d: %s.\n", pathname, errno,
-					strerror(errno));
+					errout);
 			continue;
 		}
 
@@ -3138,7 +3273,7 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 		// Extract namespace name from file (if this is a base segment file).
 
 		if (valid_file.type == TYPE_BASE) {
-			int rc = open(pathname, O_RDONLY, DEFAULT_MODE);
+			int rc = open(pathname, O_RDONLY);
 			if (rc < 0) {
 				continue;
 			}
@@ -3192,7 +3327,7 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 			if (dot_ptr != NULL &&
 					strcmp(dot_ptr, FILE_EXTENSION_CMP) == 0) {
 
-				int rc = open(pathname, O_RDONLY, DEFAULT_MODE);
+				int rc = open(pathname, O_RDONLY);
 
 				if (rc < 0) {
 					assert(valid_file.nsnm == NULL);
