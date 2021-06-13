@@ -1567,7 +1567,7 @@ backup_candidate_file(as_segment_t* segments, as_io_t* ios,
 
 	// Open (create) the segment file.
 
-	int rc = open(pathname, O_CREAT | O_RDWR | O_EXCL, io->mode);
+	int rc = open(pathname, O_CREAT | O_RDWR | O_EXCL, DEFAULT_MODE);
 
 	if (rc < 0) {
 		char errbuff[MAX_BUFFER];
