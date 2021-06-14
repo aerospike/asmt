@@ -131,7 +131,7 @@ typedef struct as_cmp_s {
 // Constant globals.
 
 static const char g_fullname[] =	"Aerospike Shared Memory Tool";
-static const char g_version[] =		"Version 0.91";
+static const char g_version[] =		"Version 0.9.0";
 static const char g_copyright[] =	"Copyright (C) 2021 Aerospike, Inc.";
 static const char g_all_rights[] =	"All rights reserved.";
 
@@ -145,7 +145,8 @@ static const key_t AS_XMEM_ARENA_KEY_BASE = (key_t)0x00000100;
 static const int AS_XMEM_INSTANCE_KEY_SHIFT = 20;
 static const int AS_XMEM_NS_KEY_SHIFT = 12;
 
-static const unsigned int DEFAULT_MODE = 0666;
+static const unsigned int DEFAULT_MODE = 0600;
+static const unsigned int DEFAULT_MODE_DIR = 0700;
 static const unsigned int MODE_MASK = 0x1ff;
 
 static const int SHMGET_FLAGS_CREATE_ONLY = IPC_CREAT | IPC_EXCL | 0666;
@@ -862,7 +863,7 @@ check_dir(const char* pathname, bool is_write, bool create)
 		// If not and we've been asked (create is true), can we create it?
 
 		if (create) {
-			if (mkdir(pathname, DEFAULT_MODE) != 0) {
+			if (mkdir(pathname, DEFAULT_MODE_DIR) != 0) {
 				return false;
 			}
 			if (g_verbose) {
