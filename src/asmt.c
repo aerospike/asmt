@@ -552,7 +552,7 @@ usage(bool verbose)
 
 	print_newline_and_blanks(first_len);
 
-	printf(" [-p <pathdir>]");
+	printf(" -p <pathdir>");
 	printf(" [-r]");
 	printf(" [-t <threads>]");
 	printf(" [-v]");
