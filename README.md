@@ -182,7 +182,7 @@ For other restore options, use `-h` or see the list below.
 
 ```
 usage: asmt [-a] [-b] [-c] [-h] [-i <instance>] [-n <name>[,<name>...]]
-            [-p <pathdir>] [-r] [-t <threads>] [-v] [-z]
+            -p <pathdir> [-r] [-t <threads>] [-v] [-z]
 
 -a analyze (advisory - goes with '-b' or '-r')
 -b back up (operation or advisory with '-a')
