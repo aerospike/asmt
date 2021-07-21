@@ -105,7 +105,7 @@ After checking that the server node is not running, run the asmt binary to
 back up the primary index, for example:
 
 ```
-$ sudo ./asmt -b -v -p /path/to/index/backup
+$ ./asmt -b -v -p /path/to/index/backup
 ```
 
 where:
@@ -129,9 +129,12 @@ e.g., `-n foo,bar,test`.
 
 To compress the files while backing them up, use the `-z` option.
 
-**Note:** ASMT must be run as uid 0 and gid 0. The sudo command allows this.
-
 For other back up options, use `-h` or see the list below.
+
+**Note:** ASMT must be run with the same user and group that was used to run the
+Aerospike database server. If you ran the Aerospike database server as user
+root, group root, you must run ASMT as user root, group root. The sudo command
+can facilitate this.
 
 When the back up is complete, there will be files in the specified directory
 corresponding to all the relevant shared memory blocks. The file names are the
@@ -152,7 +155,7 @@ After reboot, but before restarting the Aerospike Database server, run the asmt
 binary to restore the primary index, for example:
 
 ```
-$ sudo ./asmt -r -v -p /path/to/index/backup
+$ ./asmt -r -v -p /path/to/index/backup
 ```
 
 where:
@@ -177,6 +180,11 @@ There is no need to specify the `-z` option when restoring, even if the files
 are compressed (i.e., they were created using the `-z` option).
 
 For other restore options, use `-h` or see the list below.
+
+**Note:** ASMT must be run with the same user and group that was used to run the
+Aerospike database server. If you ran the Aerospike database server as user
+root, group root, you must run ASMT as user root, group root. The sudo command
+can facilitate this.
 
 ### ASMT Options
 
@@ -247,6 +255,11 @@ These options have the following meanings:
 	    restoring a primary index that was backed up using this option. (Files
 	    compressed by back up are automatically decompressed by restore.)
 
+**Note:** ASMT must be run with the same user and group that was used to run the
+Aerospike database server. If you ran the Aerospike database server as user
+root, group root, you must run ASMT as user root, group root. The sudo command
+can facilitate this.
+
 
 ### Common Errors
 
@@ -260,11 +273,16 @@ primary index, Aerospike Database will fail as it attempts to delete shared
 memory segments. In that case, remove any shared memory segments created
 by ASMT and retry the restore operation.
 
+**Note:** ASMT must be run with the same user and group that was used to run the
+Aerospike database server. If you ran the Aerospike database server as user
+root, group root, you must run ASMT as user root, group root. The sudo command
+can facilitate this.
+
 The following command may be used to delete Aerospike Database files that
 were backed up to the file system:
 
 ```
-sudo rm -rf pathname
+rm -rf pathname
 ```
 
 where: pathname is the path name specified with the `-p` option to ASMT.
@@ -278,7 +296,7 @@ The following command may be used to delete Aerospike Database shared memory
 segments:
 
 ```
-ipcs | grep ^0xae | awk '{print $1}' | xargs -i sudo ipcrm -M {}
+ipcs | grep ^0xae | awk '{print $1}' | xargs -i ipcrm -M {}
 ```
 
 ## License

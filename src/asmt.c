@@ -28,8 +28,10 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <grp.h>
 #include <libgen.h>
 #include <limits.h>
+#include <pwd.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -131,7 +133,7 @@ typedef struct as_cmp_s {
 // Constant globals.
 
 static const char g_fullname[] =	"Aerospike Shared Memory Tool";
-static const char g_version[] =		"Version 0.9.1";
+static const char g_version[] =		"Version 0.9.2";
 static const char g_copyright[] =	"Copyright (C) 2021 Aerospike, Inc.";
 static const char g_all_rights[] =	"All rights reserved.";
 
@@ -403,18 +405,6 @@ main(int argc, char* argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	// Try to become uid 0, gid 0.
-
-	if (setuid(0) != 0 || setgid(0) != 0) {
-		char errbuff[MAX_BUFFER];
-		char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
-
-		printf("Must operate as uid 0, gid 0: error was %d: %s.\n\n",
-				errno, errout);
-		usage(false);
-		exit(EXIT_FAILURE);
-	}
-
 	// If we haven't printed usage (and verbose), print copyright info.
 
 	if (g_verbose) {
@@ -579,11 +569,10 @@ usage(bool verbose)
 
 	printf("\n");
 
-	printf("1. Must be run as root (uid 0, gid 0); try sudo.\n");
-	printf("2. The '-c' option has a significant performance cost.\n");
-	printf("3. However, this is reduced when combined with the '-z' option.\n");
-	printf("4. Should be run in verbose mode ('-v') if possible.\n");
-	printf("5. A comma-separated list of namespace names may be provided.\n");
+	printf("1. The '-c' option has a significant performance cost.\n");
+	printf("2. However, this is reduced when combined with the '-z' option.\n");
+	printf("3. Should be run in verbose mode ('-v') if possible.\n");
+	printf("4. A comma-separated list of namespace names may be provided.\n");
 
 	if (! verbose) {
 		return;
@@ -1276,8 +1265,8 @@ display_segments(as_segment_t* segments, uint32_t base, uint32_t n_stages)
 
 	table[0][0] = strdup("key");
 	table[0][1] = strdup("shmid");
-	table[0][2] = strdup("uid");
-	table[0][3] = strdup("gid");
+	table[0][2] = strdup("user");
+	table[0][3] = strdup("group");
 	table[0][4] = strdup("mode");
 	table[0][5] = strdup("natt");
 	table[0][6] = strdup("segsz");
@@ -1303,10 +1292,24 @@ display_segments(as_segment_t* segments, uint32_t base, uint32_t n_stages)
 		sprintf(buffer,"%d", segment->shmid);
 		table[i + 1][1] = strdup(buffer);
 
-		sprintf(buffer,"%d", segment->uid);
+		struct passwd *pw;
+
+		if ((pw = getpwuid(segment->uid)) == NULL) {
+			sprintf(buffer, "%d", segment->uid);
+		}
+		else {
+			sprintf(buffer, "%s", pw->pw_name);
+		}
 		table[i + 1][2] = strdup(buffer);
 
-		sprintf(buffer,"%d", segment->gid);
+		struct group *gr;
+	
+		if ((gr = getgrgid(segment->gid)) == NULL) {
+			sprintf(buffer,"%d", segment->gid);
+		}
+		else {
+			sprintf(buffer,"%s", gr->gr_name);
+		}
 		table[i + 1][3] = strdup(buffer);
 
 		sprintf(buffer,"0%o", segment->mode);
@@ -2604,8 +2607,8 @@ display_files(as_file_t* files, uint32_t base, uint32_t n_stages)
 	// Create the table header.
 
 	table[0][0] = strdup("key");
-	table[0][1] = strdup("uid");
-	table[0][2] = strdup("gid");
+	table[0][1] = strdup("user");
+	table[0][2] = strdup("group");
 	table[0][3] = strdup("mode");
 	table[0][4] = strdup("filsz");
 	table[0][5] = strdup("segsz");
@@ -2625,10 +2628,24 @@ display_files(as_file_t* files, uint32_t base, uint32_t n_stages)
 		sprintf(buffer,"%08x", file->key);
 		table[i + 1][0] = strdup(buffer);
 
-		sprintf(buffer,"%d", file->uid);
+		struct passwd *pw;
+
+		if ((pw = getpwuid(file->uid)) == NULL) {
+			sprintf(buffer, "%d", file->uid);
+		}
+		else {
+			sprintf(buffer, "%s", pw->pw_name);
+		}
 		table[i + 1][1] = strdup(buffer);
 
-		sprintf(buffer,"%d", file->gid);
+		struct group *gr;
+	
+		if ((gr = getgrgid(file->gid)) == NULL) {
+			sprintf(buffer,"%d", file->gid);
+		}
+		else {
+			sprintf(buffer,"%s", gr->gr_name);
+		}
 		table[i + 1][2] = strdup(buffer);
 
 		sprintf(buffer,"0%o", file->mode);
