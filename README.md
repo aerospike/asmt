@@ -10,7 +10,7 @@ of an Aerospike Database Enterpise Edition (EE).
     * [Clone the Repo](#clone-the-repo)
     * [Download the Source](#download-the-source)
   * [Install the Dependencies](#install-the-dependencies)
-    * [For CentOS](#for-centos)
+    * [For Redhat or CentOS](#for-redhat-or-centos)
     * [For Debian or Ubuntu](#for-debian-or-ubuntu)
   * [Compile](#compile)
 * [Using ASMT](#using-asmt)
@@ -76,9 +76,11 @@ directory.
 
 Before you can build ASMT, you must install certain libraries.
 
-#### For CentOS
+#### For Redhat or CentOS
 ```
-$ sudo yum install make gcc zlib-devel
+$ sudo yum install dnf-plugins-core
+$ sudo yum config-manager --set-enabled powertools
+$ sudo yum install make gcc zlib-devel zlib-static
 ```
 
 #### For Debian or Ubuntu
