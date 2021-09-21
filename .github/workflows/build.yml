@@ -1,8 +1,11 @@
 name: Build ASMT
 
 on:
-  workflow_dispatch:
-
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ naster ]
+    
 jobs:
   build:
 
@@ -15,7 +18,7 @@ jobs:
         run: sudo apt-get install make gcc libc6-dev zlib1g-dev
       - name: build
         run: make
-      - name: Archive Binary 
+      - name: Upload Artifact 
         uses: actions/upload-artifact@v2.2.4
         with: 
           name: asmt
