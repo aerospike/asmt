@@ -20,12 +20,6 @@ jobs:
         with: 
           name: asmt
           path: target/bin/asmt
-          if-no-files-found: error
-      - name: Download Binary
-        uses: actions/download-artifact@v2.0.10
-        with:
-          name: asmt
-          path: pkgs
-          
+          if-no-files-found: error         
             
 
