@@ -133,7 +133,7 @@ typedef struct as_cmp_s {
 // Constant globals.
 
 static const char g_fullname[] =	"Aerospike Shared Memory Tool";
-static const char g_version[] =		"Version 0.9.2";
+static const char g_version[] =		"Version 0.9.3";
 static const char g_copyright[] =	"Copyright (C) 2021 Aerospike, Inc.";
 static const char g_all_rights[] =	"All rights reserved.";
 
@@ -170,7 +170,7 @@ enum { MIN_NSID = 1			};	// Minimum acceptable value.
 enum { MAX_NSID = 32		};	// Maximum acceptable value.
 
 enum { MIN_ARENA = 0x100	};	// Minimum acceptable value.
-enum { MAX_ARENA = 0x1FF	};	// Maximum acceptable value.
+enum { MAX_ARENA = 0x8FF	};	// Maximum acceptable value.
 enum { INV_ARENA = 0xffff	};	// Any unacceptable value.
 
 enum { BASEVER_OFF = 0		};	// Offset of version in base segment.
