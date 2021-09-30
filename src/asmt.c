@@ -1357,7 +1357,7 @@ display_segments(as_segment_t* segments, uint32_t base, uint32_t n_stages)
 		table[i + 1][10] = strdup(buffer);
 
 		if (segment->type == TYPE_STAGE) {
-			sprintf(buffer, "%03x", segment->stage);
+			sprintf(buffer, "%04x", segment->stage);
 		}
 		else {
 			sprintf(buffer,"-");
@@ -2685,7 +2685,7 @@ display_files(as_file_t* files, uint32_t base, uint32_t n_stages)
 		table[i + 1][9] = strdup(buffer);
 
 		if (file->type == TYPE_STAGE) {
-			sprintf(buffer, "%03x", file->stage);
+			sprintf(buffer, "%04x", file->stage);
 		}
 		else {
 			sprintf(buffer, "-");
