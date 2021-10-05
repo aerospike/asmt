@@ -10,16 +10,13 @@ jobs:
   build:
     strategy:
       matrix:
-        os: ['ubuntu-20.04', 'ubuntu-18.04']
+        os: [ 'ubuntu-20.04' ]
     runs-on: ${{ matrix.os }}
 
     steps:
     - name: Install Dependencies (Ubuntu-latest)
       run: sudo apt-get install make gcc libc6-dev zlib1g-dev
       if: matrix.os == 'ubuntu-20.04'
-    - name: Install Dependencies (Ubuntu-18.04)
-      run: sudo apt-get install make gcc libc6-dev zlib1g-dev
-      if: matrix.os == 'ubuntu-18.04'      
     - name: Get Sources
       uses: actions/checkout@v2
     - name: Fetch repo history
