@@ -31,7 +31,5 @@ jobs:
       uses: actions/upload-artifact@v2.2.4
       with: 
         name: asmt-${{ env.REV }}-${{ env.OS }}
-        path: |
-          target/packages/
-          target/bin/asmt
+        path: target/packages
         if-no-files-found: error
