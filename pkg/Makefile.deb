@@ -44,3 +44,5 @@ dist:
 distclean:
 	rm -rf $(DEB_SOURCE_ROOT)
 	rm -rf pkg/deb/DEBS
+
+print-% : ; @echo $($*)
