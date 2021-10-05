@@ -34,5 +34,7 @@ jobs:
       uses: actions/upload-artifact@v2.2.4
       with: 
         name: act-${{ env.REV }}-${{ env.OS }}
-        path: pkg/packages
+        path: |
+          target/packages
+          target/bin/asmt
         if-no-files-found: error
