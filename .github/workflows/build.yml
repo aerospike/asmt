@@ -32,6 +32,6 @@ jobs:
       with: 
         name: asmt-${{ env.REV }}-${{ env.OS }}
         path: |
-          target/packages
+          target/packages/
           target/bin/asmt
         if-no-files-found: error
