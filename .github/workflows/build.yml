@@ -33,3 +33,7 @@ jobs:
         name: asmt-${{ env.REV }}-${{ env.OS }}
         path: target/packages
         if-no-files-found: error
+    - name: Download Artifact
+      uses: actions/download-artifact@v2.0.10
+      with:
+        path: target/download
