@@ -2,27 +2,37 @@ name: Build ASMT
 
 on:
   push:
-    branches: [ master ]
+    branch: [ OPS-5275 ]
   pull_request:
-    branches: [ naster ]
-    
+    branch: [ OPS-5275 ]
+        
 jobs:
   build:
+    strategy:
+      matrix:
+        os: ['ubuntu-20.04', 'ubuntu-18.04']
+    runs-on: ${{ matrix.os }}
 
-    runs-on: ubuntu-latest
-
-    steps: 
-      - name: Checkout repository
-        uses: actions/checkout@v2
-      - name: configure
-        run: sudo apt-get install make gcc libc6-dev zlib1g-dev
-      - name: build
-        run: make
-      - name: Upload Artifact 
-        uses: actions/upload-artifact@v2.2.4
-        with: 
-          name: asmt
-          path: target/bin/asmt
-          if-no-files-found: error         
-            
-
+    steps:
+    - name: Install Dependencies (Ubuntu-latest)
+      run: sudo apt-get install make gcc libc6-dev zlib1g-dev
+      if: matrix.os == 'ubuntu-20.04'
+    - name: Install Dependencies (Ubuntu-18.04)
+      run: sudo apt-get install make gcc libc6-dev zlib1g-dev
+      if: matrix.os == 'ubuntu-18.04'      
+    - name: Get Sources
+      uses: actions/checkout@v2
+    - name: Fetch repo history
+      run: git fetch --prune --unshallow
+    - name: Set env
+      run: |
+        echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
+        echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
+    - name: build
+      run: make all deb
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v2.2.4
+      with: 
+        name: act-${{ env.REV }}-${{ env.OS }}
+        path: pkg/packages
+        if-no-files-found: error

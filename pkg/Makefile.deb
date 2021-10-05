@@ -1,0 +1,46 @@
+# Build asmt distribution.
+
+export DEB_SOURCE_ROOT = $(shell echo `pwd`/dist)
+export DEB_BUILD_ROOT = $(DEB_SOURCE_ROOT)/BUILD
+export CL_BASE = $(DEB_BUILD_ROOT)/opt/aerospike
+export ETC_BASE = $(DEB_BUILD_ROOT)/etc/aerospike
+
+REV = $(shell build/version)
+REV = 0.9.3
+OS = $(shell build/os_version)
+MANIFEST_DIR = manifest/TEMP
+
+.PHONY: default
+default: dist
+
+.PHONY: dist
+dist:
+
+	# Build ASMT package.
+	rm -rf $(DEB_BUILD_ROOT)/*
+	mkdir -p $(DEB_BUILD_ROOT)/DEBIAN
+	mkdir -p $(DEB_BUILD_ROOT)/usr/bin
+	mkdir -p target/packages
+	install -m 755 pkg/deb/postinst $(DEB_BUILD_ROOT)/DEBIAN/postinst
+	install -m 755 pkg/deb/prerm $(DEB_BUILD_ROOT)/DEBIAN/prerm
+	install -m 644 pkg/deb/control $(DEB_BUILD_ROOT)/DEBIAN/control
+
+	mkdir -p $(CL_BASE)
+	mkdir -p $(CL_BASE)/bin
+
+        # asmt
+	install -m 755 target/bin/asmt $(CL_BASE)/bin/asmt
+
+	# Create symlinks to /usr/bin
+	mkdir -p $(DEB_BUILD_ROOT)/usr/bin
+	ln -sf /opt/aerospike/bin/asmt $(DEB_BUILD_ROOT)/usr/bin/asmt
+
+
+	sed 's/@VERSION@/'$(REV)'/g' <pkg/deb/control >$(DEB_BUILD_ROOT)/DEBIAN/control
+
+	fakeroot dpkg-deb --build $(DEB_BUILD_ROOT) target/packages/asmt-$(REV).$(OS).x86_64.deb
+	rm -rf dist
+
+distclean:
+	rm -rf $(DEB_SOURCE_ROOT)
+	rm -rf pkg/deb/DEBS
