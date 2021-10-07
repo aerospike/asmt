@@ -34,8 +34,8 @@ jobs:
       run: |
         echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
         echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
-        ls -la act
-        ls -la asmt
+        ls -la .
+        ls -la ./act
     - name: build
       run: make
     - name: Upload Artifact
