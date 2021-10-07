@@ -14,8 +14,8 @@ jobs:
     - run: yum install -y dnf-plugins-core
     - run: yum-config-manager --enable powertools
     - run: yum install -y make gcc zlib-devel zlib-static
-    - run: touch /hello
-    - run: ls / 
+    - run: git clone https://github.com/aerospike/asmt.git
+    - run: ls asmt 
   build:
     strategy:
       matrix:
