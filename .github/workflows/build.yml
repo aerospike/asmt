@@ -28,6 +28,7 @@ jobs:
       uses: actions/checkout@v2
       with:
         repository: citrusleaf/qe-docker
+        ref: master
         path: qe-docker
     - name: Set env
       run: |
