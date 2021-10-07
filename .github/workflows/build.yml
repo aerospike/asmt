@@ -9,7 +9,7 @@ on:
 jobs:
   debug:
     runs-on: ubuntu-latest
-    container: { image: docker.qe.aerospike.com/build/aerospike-tools-alt:centos-7 }
+    container: { image: alpine }
     steps:  
     - run: uname -a
     - run: cat /etc/alpine-release
