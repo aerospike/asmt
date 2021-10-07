@@ -2,11 +2,19 @@ name: Build ASMT
 
 on:
   push:
-    branch: [ OPS-5275 ]
+    branches: [ OPS-5275 ]
   pull_request:
-    branch: [ OPS-5275 ]
+    branches: [ OPS-5275 ]
         
 jobs:
+  debug:
+    runs-on: ubuntu-latest
+    container: { image: alpine }
+    steps:  
+    - run: uname -a
+    - run: cat /etc/alpine-release
+    - run: touch /hello
+    - run: ls / 
   build:
     strategy:
       matrix:
