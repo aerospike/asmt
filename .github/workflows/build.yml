@@ -16,7 +16,6 @@ jobs:
     - run: yum install -y make gcc zlib-devel zlib-static git
     - run: git clone https://github.com/aerospike/asmt.git
     - run: cd asmt
-    - run: git checkout OPS-5275
     - run: make asmt rpm
     
   build:
