@@ -15,7 +15,7 @@ jobs:
     - run: yum-config-manager --enable powertools
     - run: yum install -y make gcc zlib-devel zlib-static git
     - run: git clone --branch OPS-5275 https://github.com/aerospike/asmt.git
-    - run: cd asmt & ls -la
+    - run: make -f asmt/Makefile asmt rpm
 
     
   build:
