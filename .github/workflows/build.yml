@@ -12,9 +12,9 @@ jobs:
     container: { image: waffleimage/centos7 }
     steps:  
     - run: uname -a
-    - run: yum install dnf-plugins-core
+    - run: yum install -y dnf-plugins-core
     - run: yum config-manager --set-enabled powertools
-    - run: yum install make gcc zlib-devel zlib-static
+    - run: yum install -y make gcc zlib-devel zlib-static
     - run: touch /hello
     - run: ls / 
   build:
