@@ -9,10 +9,10 @@ on:
 jobs:
   debug:
     runs-on: ubuntu-latest
-    container: { image: alpine }
+    container: { image: centos:7 }
     steps:  
     - run: uname -a
-    - run: cat /etc/alpine-release
+    - run: cat /etc/os-release
     - run: touch /hello
     - run: ls / 
   build:
