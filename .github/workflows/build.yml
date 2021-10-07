@@ -14,11 +14,10 @@ jobs:
     - run: yum install -y dnf-plugins-core
     - run: yum-config-manager --enable powertools
     - run: yum install -y make gcc zlib-devel zlib-static git
-    - run: git clone https://github.com/aerospike/asmt.git
+    - run: git clone --branch OPS-5275 https://github.com/aerospike/asmt.git
     - run: cd asmt
-    - run: git checkout OPS-5275
     - run: ls -la 
-    - run: make asmt rpm
+    - run: make
     
   build:
     strategy:
