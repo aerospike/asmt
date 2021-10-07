@@ -27,15 +27,15 @@ jobs:
     - name: Checkout ACT
       uses: actions/checkout@v2
       with:
-        repository: aerospike/act
+        repository: citrusleaf/qe-docker
         ref: master
-        path: act
+        path: qe-docker
     - name: Set env
       run: |
         echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
         echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
         ls -la .
-        ls -la ./act
+        ls -la ./qe-docker
     - name: build
       run: make
     - name: Upload Artifact
