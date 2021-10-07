@@ -11,9 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     container: { image: waffleimage/centos7 }
     steps:  
-    - run: uname -a
+    - run: yum update
     - run: yum install -y dnf-plugins-core
-    - run: dnf config-manager --set-enabled powertools
+    - run: yum config-manager --set-enabled powertools
     - run: yum install -y make gcc zlib-devel zlib-static
     - run: touch /hello
     - run: ls / 
