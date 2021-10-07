@@ -13,7 +13,7 @@ jobs:
     steps:  
     - run: uname -a
     - run: yum install -y dnf-plugins-core
-    - run: yum config-manager --set-enabled powertools
+    - run: dnf config-manager --set-enabled powertools
     - run: yum install -y make gcc zlib-devel zlib-static
     - run: touch /hello
     - run: ls / 
