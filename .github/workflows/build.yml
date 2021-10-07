@@ -10,30 +10,37 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ 'ubuntu-20.04' ]
+        os: [ 'ubuntu-20.04', 'ubuntu-18.04' ]
     runs-on: ${{ matrix.os }}
 
     steps:
     - name: Install Dependencies (Ubuntu-latest)
       run: sudo apt-get install make gcc libc6-dev zlib1g-dev
       if: matrix.os == 'ubuntu-20.04'
+    - name: Install Dependencies (Ubuntu-latest)
+      run: sudo apt-get install make gcc libc6-dev zlib1g-dev
+      if: matrix.os == 'ubuntu-18.04'
     - name: Get Sources
       uses: actions/checkout@v2
-    - name: Fetch repo history
-      run: git fetch --prune --unshallow
+      with:
+        fetch-depth: 0
+    - name: Checkout QE Docker
+      uses: actions/checkout@v2
+      with:
+        repository: citrusleaf/qe-docker
+        path: qe-docker
     - name: Set env
       run: |
         echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
         echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
+        ls -la qe-docker
+        ls -la asmt
     - name: build
-      run: make all deb
+      run: make
     - name: Upload Artifact
       uses: actions/upload-artifact@v2.2.4
       with: 
         name: asmt-${{ env.REV }}-${{ env.OS }}
         path: target/packages
         if-no-files-found: error
-    - name: Download Artifact
-      uses: actions/download-artifact@v2.0.10
-      with:
-        path: http://build.browser.qe.aerospike.com/aerospike/asmt/pvinh
+
