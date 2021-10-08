@@ -29,7 +29,9 @@ jobs:
         yum install -y make gcc zlib-devel zlib-static git rpm-build
       if: matrix.container == 'redhat/ubi8'
     - name: Install Dependencies (Debian)
-      run: apt-get install make gcc libc6-dev zlib1g-dev
+      run: |
+        apt-get update
+        apt-get install make gcc libc6-dev zlib1g-dev
       if: |
         matrix.container == 'debian:8' || matrix.container == 'debian:9' || matrix.container == 'debian:10'
     - name: Clone Source
