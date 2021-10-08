@@ -25,14 +25,10 @@ jobs:
         ls -la $GITHUB_WORKSPACE
         cp target/packages/* $GITHUB_WORKSPACE
         ls -la $GITHUB_WORKSPACE
-  upload:
-    runs-on: ubuntu-latest
-    needs: debug
-    steps:
     - uses: actions/upload-artifact@v2.2.4
       with:
         name: asmt-el7
-        path: ${{ GITHUB_WORKSPACE }}/asmt-*
+        path: target/packages/asmt-*
         if-no-files-found: error
   build:
     strategy:
