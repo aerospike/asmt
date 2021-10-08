@@ -12,17 +12,24 @@ jobs:
     container: 
       image: waffleimage/centos7
       options: "--entrypoint /bin/bash"
-    steps:  
-    - run: yum install -y dnf-plugins-core
-    - run: yum-config-manager --enable powertools
-    - run: yum install -y make gcc zlib-devel zlib-static git rpm-build
-    - run: git clone --branch OPS-5275 https://github.com/aerospike/asmt.git
+    steps:
+    - name: Install Dependencies
+      run: |
+        yum install -y dnf-plugins-core
+        yum-config-manager --enable powertools
+        yum install -y make gcc zlib-devel zlib-static git rpm-build
+    - name: Clone Source
+      run: git clone --branch OPS-5275 https://github.com/aerospike/asmt.git
     - name: buils asmt
       working-directory: ./asmt
-      run: make asmt rpm
-    - uses: actions/upload-artifact@v2.2.4
+      run: |
+        echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
+        echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
+        make asmt rpm
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v2.2.4
       with:
-        name: asmt-el7
+        name: asmt-${{ env.REV }}-${{ env.OS }}
         path: /__w/asmt/asmt/asmt/target/packages/asmt-*
         if-no-files-found: error
   build:
