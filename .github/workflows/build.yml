@@ -28,7 +28,7 @@ jobs:
     - uses: actions/upload-artifact@v2.2.4
       with:
         name: asmt-el7
-        path: target/packages/asmt-*
+        path: /__w/asmt/asmt/asmt/target/packages/asmt-*
         if-no-files-found: error
   build:
     strategy:
