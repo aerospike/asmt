@@ -31,7 +31,7 @@ jobs:
     - name: Install Dependencies (Debian)
       run: |
         apt-get -y update
-        apt-get -y install make gcc libc6-dev zlib1g-dev git
+        apt-get -y install make gcc libc6-dev zlib1g-dev git build-essential
       if: |
         matrix.container == 'debian:8' || matrix.container == 'debian:9' || matrix.container == 'debian:10'
     - name: Clone Source
