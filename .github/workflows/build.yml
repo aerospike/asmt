@@ -27,7 +27,7 @@ jobs:
         ls -la $GITHUB_WORKSPACE
     - uses: actions/upload-artifact@v2.2.4
       with: 
-        path: target/packages
+        path: $GITHUB_WORKSPACE
         if-no-files-found: error
   build:
     strategy:
