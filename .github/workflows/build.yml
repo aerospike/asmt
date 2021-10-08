@@ -32,7 +32,7 @@ jobs:
     - uses: actions/upload-artifact@v2.2.4
       with:
         name: asmt-el7
-        path: $GITHUB_WORKSPACE/asmt-*
+        path: ${{ env.GITHUB_WORKSPACE/asmt-* }}
         if-no-files-found: error
   build:
     strategy:
