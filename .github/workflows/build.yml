@@ -7,7 +7,7 @@ on:
     branches: [ OPS-5275 ]
         
 jobs:
-  debug:
+  centos7:
     runs-on: ubuntu-latest
     container: 
       image: waffleimage/centos7
@@ -19,12 +19,7 @@ jobs:
     - run: git clone --branch OPS-5275 https://github.com/aerospike/asmt.git
     - name: buils asmt
       working-directory: ./asmt
-      run: |
-        ls -la 
-        make asmt rpm
-        ls -la $GITHUB_WORKSPACE
-        cp target/packages/* $GITHUB_WORKSPACE
-        ls -la $GITHUB_WORKSPACE
+      run: make asmt rpm
     - uses: actions/upload-artifact@v2.2.4
       with:
         name: asmt-el7
