@@ -36,12 +36,21 @@ jobs:
         matrix.container == 'debian:8' || matrix.container == 'debian:9' || matrix.container == 'debian:10'
     - name: Clone Source
       run: git clone --branch OPS-5275 https://github.com/aerospike/asmt.git
-    - name: buils asmt
+    - name: buils asmt (centos)
       working-directory: ./asmt
+      if: matrix.container == 'centos:7' || matrix.container == 'centos:8'
       run: |
         echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
         echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
         make asmt rpm
+    - name: build asmt (debian)
+      working-directory: ./asmt
+      if: |
+        matrix.container == 'debian:8' || matrix.container == 'debian:9' || matrix.container == 'debian:10' 
+      run: |
+        echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
+        echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
+        make asmt deb      
     - name: Upload Artifacts
       uses: actions/upload-artifact@v2.2.4
       with:
