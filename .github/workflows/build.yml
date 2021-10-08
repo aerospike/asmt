@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        container: [ centos:7, centos:8 ]
+        container: [ "centos:7", "centos:8" ]
     container:
       image: ${{ matrix.container }}
       options: "--entrypoint /bin/bash"
