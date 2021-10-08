@@ -9,13 +9,16 @@ on:
 jobs:
   debug:
     runs-on: ubuntu-latest
-    container: { image: waffleimage/centos7 }
+    container: 
+      image: waffleimage/centos7
+      options: "--entrypoint /bin/bash"
     steps:  
     - run: yum install -y dnf-plugins-core
     - run: yum-config-manager --enable powertools
     - run: yum install -y make gcc zlib-devel zlib-static git
     - run: git clone --branch OPS-5275 https://github.com/aerospike/asmt.git
-    - run: cd /asmt
+    - run: ls -la 
+    - run: cd asmt
     - run: ls -la 
 
     
