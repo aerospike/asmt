@@ -10,7 +10,7 @@ jobs:
   centos7:
     runs-on: ubuntu-latest
     container: 
-      image: waffleimage/centos7
+      image: centos7
       options: "--entrypoint /bin/bash"
     steps:
     - name: Install Dependencies
