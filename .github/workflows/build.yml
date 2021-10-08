@@ -30,7 +30,8 @@ jobs:
       if: matrix.container == 'redhat/ubi8'
     - name: Install Dependencies (Debian)
       run: apt-get install make gcc libc6-dev zlib1g-dev
-      if: matrix.container =~ "debian*"
+      if: |
+        matrix.container == 'debian:8' || matrix.container == 'debian:9' || matrix.container == 'debian:10'
     - name: Clone Source
       run: git clone --branch OPS-5275 https://github.com/aerospike/asmt.git
     - name: buils asmt
