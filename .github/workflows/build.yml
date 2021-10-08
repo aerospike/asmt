@@ -15,7 +15,7 @@ jobs:
     steps:  
     - run: yum install -y dnf-plugins-core
     - run: yum-config-manager --enable powertools
-    - run: yum install -y make gcc zlib-devel zlib-static git
+    - run: yum install -y make gcc zlib-devel zlib-static git rpm-build
     - run: git clone --branch OPS-5275 https://github.com/aerospike/asmt.git
     - name: buils asmt
       working-directory: ./asmt
