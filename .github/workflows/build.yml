@@ -22,7 +22,9 @@ jobs:
       run: |
         ls -la 
         make asmt rpm
-        ls -la target/packages
+        ls -la $GITHUB_WORKSPACE
+        cp target/packages/* $GITHUB_WORKSPACE
+        ls -la $GITHUB_WORKSPACE
     
   build:
     strategy:
