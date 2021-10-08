@@ -25,7 +25,10 @@ jobs:
         ls -la $GITHUB_WORKSPACE
         cp target/packages/* $GITHUB_WORKSPACE
         ls -la $GITHUB_WORKSPACE
-    
+    - uses: actions/upload-artifact@v2.2.4
+      with: 
+        path: target/packages
+        if-no-files-found: error
   build:
     strategy:
       matrix:
