@@ -9,8 +9,11 @@ on:
 jobs:
   centos7:
     runs-on: ubuntu-latest
-    container: 
-      image: centos:7
+    strategy:
+      matrix:
+        container: [ centos:7, centos:8 ]
+    container:
+      image: ${{ matrix.container }}
       options: "--entrypoint /bin/bash"
     steps:
     - name: Install Dependencies
