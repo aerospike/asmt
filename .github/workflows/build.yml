@@ -95,4 +95,11 @@ jobs:
         name: asmt-${{ env.REV }}-${{ env.OS }}
         path: target/packages
         if-no-files-found: error
-
+    - name: copy file via ssh password
+      uses: appleboy/scp-action@master
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        password: ${{ secrets.PASSWORD }}
+        source: "target/packages/*"
+        target: "/home/pvinh/asmt"
