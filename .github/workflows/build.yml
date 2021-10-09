@@ -97,13 +97,3 @@ jobs:
         name: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }}
         path: target/packages
         if-no-files-found: error
-    - name: Deploy to sandbox via rsync
-      uses: trendyminds/github-actions-rsync@master
-      with:
-        RSYNC_OPTIONS: -avzr --delete --exclude node_modules --exclude '.git*'
-        RSYNC_TARGET: /home/pvinh/asmt/
-        RSYNC_SOURCE: target/packages/*
-      env:
-        SSH_PRIVATE_KEY: ${{secrets.PASSWORD}}
-        SSH_USERNAME: ${{secrets.USERNAME}}
-        SSH_HOSTNAME: ${{secrets.HOST}}
