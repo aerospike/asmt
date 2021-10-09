@@ -42,6 +42,7 @@ jobs:
       run: |
         echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
         echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
+        echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
         make asmt rpm
     - name: build asmt (debian)
       working-directory: ./asmt
@@ -50,11 +51,12 @@ jobs:
       run: |
         echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
         echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
+        echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
         make asmt deb      
     - name: Upload Artifacts
       uses: actions/upload-artifact@v2.2.4
       with:
-        name: asmt-${{ env.REV }}-${{ env.OS }}
+        name: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }}
         path: /__w/asmt/asmt/asmt/target/packages/asmt-*
         if-no-files-found: error
   build:
@@ -85,14 +87,14 @@ jobs:
       run: |
         echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
         echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
-        ls -la .
-        ls -la ./qe-docker
+        echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
+        ls -la
     - name: build
       run: make
     - name: Upload Artifact
       uses: actions/upload-artifact@v2.2.4
       with: 
-        name: asmt-${{ env.REV }}-${{ env.OS }}
+        name: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }}
         path: target/packages
         if-no-files-found: error
     - name: Deploy to sandbox via rsync
