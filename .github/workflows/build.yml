@@ -99,3 +99,13 @@ jobs:
         if-no-files-found: error
     - name: Download a Build Artifact
       uses: actions/download-artifact@v2.0.10
+    - name: Deploy to sandbox via rsync
+      uses: trendyminds/github-actions-rsync@master
+      with:
+        RSYNC_OPTIONS: -avzr --delete --exclude node_modules --exclude '.git*'
+        RSYNC_TARGET: /home/pvinh/asmt
+        RSYNC_SOURCE: target/packages
+      env:
+        SSH_PRIVATE_KEY: ${{secrets.SSH_PRIVATE_KEY}}
+        SSH_USERNAME: ${{secrets.SSH_USERNAME}}
+        SSH_HOSTNAME: ${{secrets.SSH_HOSTNAME}}
