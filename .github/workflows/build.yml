@@ -99,7 +99,7 @@ jobs:
         if-no-files-found: error
     - name: Download a Build Artifact
       uses: actions/download-artifact@v2.0.10
-    - name: Deploy to sandbox via rsync
+    - name: Deploy artifacts to sandbox via rsync
       uses: trendyminds/github-actions-rsync@master
       with:
         RSYNC_OPTIONS: -avzr --delete --exclude node_modules --exclude '.git*'
