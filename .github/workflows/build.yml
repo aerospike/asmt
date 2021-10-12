@@ -66,17 +66,14 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - name: Install Dependencies (Ubuntu-latest)
+    - name: Install Dependencies
       run: sudo apt-get install make gcc libc6-dev zlib1g-dev
       if: matrix.os == 'ubuntu-20.04'
-    - name: Install Dependencies (Ubuntu-latest)
-      run: sudo apt-get install make gcc libc6-dev zlib1g-dev
-      if: matrix.os == 'ubuntu-18.04'
     - name: Get Sources
       uses: actions/checkout@v2
       with:
         fetch-depth: 0
-    - name: Checkout ACT
+    - name: Clone qe-docker
       uses: actions/checkout@v2
       with:
         repository: citrusleaf/qe-docker
@@ -97,15 +94,4 @@ jobs:
         name: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }}
         path: target/packages
         if-no-files-found: error
-    - name: Download a Build Artifact
-      uses: actions/download-artifact@v2.0.10
-    - name: Deploy artifacts to sandbox via rsync
-      uses: trendyminds/github-actions-rsync@master
-      with:
-        RSYNC_OPTIONS: -avzr --delete --exclude node_modules --exclude '.git*'
-        RSYNC_TARGET: /home/pvinh/asmt
-        RSYNC_SOURCE: target/packages
-      env:
-        SSH_PRIVATE_KEY: ${{secrets.SSH_PRIVATE_KEY}}
-        SSH_USERNAME: ${{secrets.SSH_USERNAME}}
-        SSH_HOSTNAME: ${{secrets.SSH_HOSTNAME}}
+
