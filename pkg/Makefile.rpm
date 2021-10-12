@@ -9,8 +9,6 @@ MANIFEST_DIR = manifest/TEMP
 REV = $(shell build/version | sed 's/-/_/g')
 OS = $(shell build/os_version)
 #REV = $(shell git describe 2>/dev/null; if [ $${?} != 0 ]; then echo 'unknown'; fi)
-#REV = 0.9.3
-#OS = el7
 
 .PHONY: default
 default: dist
