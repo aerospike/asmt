@@ -80,7 +80,7 @@ jobs:
         echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
         ls -la
     - name: build
-      run: make deb
+      run: make asmt deb
     - name: Upload Artifact
       uses: actions/upload-artifact@v2.2.4
       with: 
