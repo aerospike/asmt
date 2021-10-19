@@ -31,7 +31,7 @@ LIBRARIES = -Wl,-Bstatic -lz -Wl,-Bdynamic -lpthread -lrt
 
 default: all
 
-all: asmt rpm deb
+all: asmt
 
 target_dir:
 	@/bin/mkdir -p $(DIR_BIN) $(OBJ_DIRS)
