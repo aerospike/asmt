@@ -94,7 +94,7 @@ jobs:
           host: smtp.gmail.com
           account: ${{secrets.MAIL_ADDRESS}}
           password: ${{secrets.MAIL_PASSWORD}}
-          sender: devellany
+          sender: Phuc Vinh
           from: ${{secrets.MAIL_ADDRESS}}
           subject: Github Actions job result
           body: file://README.md
