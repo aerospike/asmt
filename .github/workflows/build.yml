@@ -87,35 +87,16 @@ jobs:
         name: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }}
         path: target/packages
         if-no-files-found: error
-        
-    - name: Send mail
-      uses: dawidd6/action-send-mail@v3
+
+    - name: Send email
+      uses: devellany/send-mail@v1.0.2
       with:
-        # Required mail server address:
-        server_address: smtp.mail.yahoo.com
-        # Required mail server port:
-        server_port: 587
-        # Optional (recommended): mail server username:
-        username: ${{secrets.MAIL_USERNAME}}
-        # Optional (recommended) mail server password:
-        password: ${{secrets.MAIL_PASSWORD}}
-        # Required mail subject:
-        subject: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }}
-        # Required recipients' addresses:
-        to: pvinh@aerospike.com
-        # Required sender full name (address can be skipped):
-        from: Phuc Vinh
-        # Optional whether this connection use TLS (default is true if server_port is 465)
-        secure: true
-        # Optional plain body:
-        body: Build job of ${{github.repository}} completed successfully!
-        # Optional carbon copy recipients:
-        cc: pnv02129@yahoo.com
-        # Optional blind carbon copy recipients:
-        bcc: pnv02129@yahoo.com
-        # Optional recipient of the email response:
-        reply_to: pvinh@aerospike.com
-        # Optional attachments:
-        attachments: target/packages/*
-        # Optional priority: 'high', 'normal' (default) or 'low'
-        priority: low
+          host: smtp.gmail.com
+          account: ${{secrets.MAIL_ADDRESS}}
+          password: ${{secrets.MAIL_PASSWORD}}
+          sender: devellany
+          from: ${{secrets.MAIL_ADDRESS}}
+          subject: Github Actions job result
+          body: file://README.md
+          attachments: '[{"path":"README.md"}]'
+          to: pvinh@aerospike.com
