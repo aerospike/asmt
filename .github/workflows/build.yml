@@ -59,6 +59,19 @@ jobs:
         name: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }}
         path: /__w/asmt/asmt/asmt/target/packages/asmt-*
         if-no-files-found: error
+    - name: Send email
+      uses: devellany/send-mail@v1.0.2
+      with:
+          host: smtp.gmail.com
+          account: ${{secrets.MAIL_ADDRESS}}
+          password: ${{secrets.MAIL_PASSWORD}}
+          sender: Phuc Vinh
+          from: ${{secrets.MAIL_ADDRESS}}
+          subject: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }} Package Available
+          body: file://README.md
+          attachments: '[{"path":"README.md"}]'
+          to: pvinh@aerospike.com
+  
   build:
     strategy:
       matrix:
@@ -87,7 +100,6 @@ jobs:
         name: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }}
         path: target/packages
         if-no-files-found: error
-
     - name: Send email
       uses: devellany/send-mail@v1.0.2
       with:
@@ -96,7 +108,7 @@ jobs:
           password: ${{secrets.MAIL_PASSWORD}}
           sender: Phuc Vinh
           from: ${{secrets.MAIL_ADDRESS}}
-          subject: Github Actions job result
+          subject: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }} Package Available
           body: file://README.md
           attachments: '[{"path":"README.md"}]'
           to: pvinh@aerospike.com
