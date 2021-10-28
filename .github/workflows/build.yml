@@ -104,7 +104,7 @@ jobs:
           from: ${{secrets.MAIL_ADDRESS}}
           subject: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }} Package Available
           body: ASMT package is now available for testing.
-          attachments: '[{"path":"target/packages/"}]'
+          attachments: '[{"path":"target/bin/asmt/"}]'
           to: pvinh@aerospike.com
     - name: Upload Artifact
       uses: actions/upload-artifact@v2.2.4
