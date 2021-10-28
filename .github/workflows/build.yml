@@ -94,18 +94,6 @@ jobs:
         ls -la
     - name: build
       run: make all deb
-    - name: Send email
-      uses: devellany/send-mail@v1.0.2
-      with:
-          host: smtp.gmail.com
-          account: ${{secrets.MAIL_ADDRESS}}
-          password: ${{secrets.MAIL_PASSWORD}}
-          sender: Phuc Vinh
-          from: ${{secrets.MAIL_ADDRESS}}
-          subject: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }} Package Available
-          body: ASMT package is now available for testing.
-          attachments: '[{"path":"README.md"}]'
-          to: pvinh@aerospike.com
     - name: Send mail
       uses: dawidd6/action-send-mail@v3
       with:
@@ -118,7 +106,7 @@ jobs:
         # Optional (recommended) mail server password:
         password: ${{secrets.MAIL_PASSWORD}}
         # Required mail subject:
-        subject: Github Actions job result
+        subject: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }} Package Available
         # Required recipients' addresses:
         to: pvinh@aerospike.com
         # Required sender full name (address can be skipped):
@@ -142,7 +130,7 @@ jobs:
         # Optional converting Markdown to HTML (set content_type to text/html too):
         convert_markdown: true
         # Optional attachments:
-        attachments: README.md
+        attachments: target/packages/*
         # Optional priority: 'high', 'normal' (default) or 'low'
         priority: low
     - name: Upload Artifact
