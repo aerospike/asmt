@@ -68,7 +68,7 @@ jobs:
           sender: Phuc Vinh
           from: ${{secrets.MAIL_ADDRESS}}
           subject: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }} Package Available
-          body: /__w/asmt/asmt/asmt/README.md
+          body: file:/__w/asmt/asmt/asmt/README.md
           to: pvinh@aerospike.com
   
   build:
@@ -108,6 +108,5 @@ jobs:
           sender: Phuc Vinh
           from: ${{secrets.MAIL_ADDRESS}}
           subject: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }} Package Available
-          body: file://README.md
           attachments: '[{"path":"README.md"}]'
           to: pvinh@aerospike.com
