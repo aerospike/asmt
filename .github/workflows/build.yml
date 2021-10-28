@@ -69,7 +69,7 @@ jobs:
           from: ${{secrets.MAIL_ADDRESS}}
           subject: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }} Package Available
           body: ASMT package is now available for testing.
-          attachments: '[{"path":"/__w/asmt/asmt/asmt/target/packages/asmt-*"}]'
+          attachments: '[{"path":"/__w/asmt/asmt/asmt/README.md"}]'
           to: pvinh@aerospike.com
   
   build:
@@ -94,12 +94,6 @@ jobs:
         ls -la
     - name: build
       run: make all deb
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v2.2.4
-      with: 
-        name: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }}
-        path: target/packages
-        if-no-files-found: error
     - name: Send email
       uses: devellany/send-mail@v1.0.2
       with:
@@ -110,5 +104,11 @@ jobs:
           from: ${{secrets.MAIL_ADDRESS}}
           subject: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }} Package Available
           body: ASMT package is now available for testing.
-          attachments: '[{"path":"target/packages/asmt-*"}]'
+          attachments: '[{"path":"target/packages/"}]'
           to: pvinh@aerospike.com
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v2.2.4
+      with: 
+        name: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }}
+        path: target/packages
+        if-no-files-found: error
