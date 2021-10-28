@@ -81,7 +81,7 @@ jobs:
         # Optional plain body:
         body: Build job of ${{github.repository}} completed successfully!
         # Optional HTML body read from file:
-        html_body: file:/__w/asmt/asmt/asmt/README.md
+        html_body: file://__w/asmt/asmt/asmt/README.md
         # Optional carbon copy recipients:
         cc: pnv02129@yahoo.com
         # Optional blind carbon copy recipients:
