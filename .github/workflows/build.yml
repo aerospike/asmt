@@ -11,10 +11,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        container: [ 'centos:7', 'centos:8', 'debian:9', 'debian:10', 'debian:11' ]
+        container: [ 'centos:7', 'docker.qe.aerospike.com/build/aerospike-tools-alt:centos-8', 'debian:9', 'debian:10', 'debian:11' ]
     container:
       image: ${{ matrix.container }}
       options: "--entrypoint /bin/bash"
+      credentials:
+        username: ${{ secrets.AWS_ID }}
+        password: ${{ secrets.AWS_KEY }}
     steps:
     - name: Install Dependencies (centos:7)
       run: |
