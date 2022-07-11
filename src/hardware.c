@@ -25,7 +25,6 @@
 //==========================================================
 // Includes.
 //
-
 #include "hardware.h"
 
 #include <alloca.h>
@@ -43,26 +42,21 @@
 
 #include "warnings.h"
 
-
 //==========================================================
 // Typedefs & constants.
 //
 
 typedef enum {
-	FILE_RES_OK,
-	FILE_RES_NOT_FOUND,
-	FILE_RES_ERROR
+	FILE_RES_OK, FILE_RES_NOT_FOUND, FILE_RES_ERROR
 } file_res;
-
 
 //==========================================================
 // Forward declarations.
 //
 
-static file_res read_list(const char* path, cpu_set_t* mask);
-static file_res read_index(const char* path, uint16_t* val);
-static file_res read_file(const char* path, void* buf, size_t* limit);
-
+static file_res read_list(const char *path, cpu_set_t *mask);
+static file_res read_index(const char *path, uint16_t *val);
+static file_res read_file(const char *path, void *buf, size_t *limit);
 
 //==========================================================
 // Inlines & macros.
@@ -71,18 +65,15 @@ static file_res read_file(const char* path, void* buf, size_t* limit);
 // _GNU_SOURCE gives us strerror_r() which is thread-safe.
 #define asmt_strerror(err) strerror_r(err, (char*)alloca(200), 200)
 
-
 //==========================================================
 // Public API.
 //
 
-uint32_t
-num_cpus()
-{
+uint32_t num_cpus() {
 	cpu_set_t os_cpus_online;
 
-	if (read_list("/sys/devices/system/cpu/online", &os_cpus_online) !=
-			FILE_RES_OK) {
+	if (read_list("/sys/devices/system/cpu/online", &os_cpus_online)
+			!= FILE_RES_OK) {
 		printf("ERROR: couldn't read list of online CPUs\n");
 		return 0;
 	}
@@ -125,14 +116,11 @@ num_cpus()
 	return n_cpus;
 }
 
-
 //==========================================================
 // Local helpers.
 //
 
-static file_res
-read_list(const char* path, cpu_set_t* mask)
-{
+static file_res read_list(const char *path, cpu_set_t *mask) {
 	char buf[1000];
 	size_t limit = sizeof(buf);
 	file_res res = read_file(path, buf, &limit);
@@ -144,21 +132,19 @@ read_list(const char* path, cpu_set_t* mask)
 	buf[limit - 1] = '\0';
 	CPU_ZERO(mask);
 
-	char* at = buf;
+	char *at = buf;
 
 	while (true) {
-		char* delim;
+		char *delim;
 		uint64_t from = strtoul(at, &delim, 10);
 		uint64_t thru;
 
-		if (*delim == ',' || *delim == '\0'){
+		if (*delim == ',' || *delim == '\0') {
 			thru = from;
-		}
-		else if (*delim == '-') {
+		} else if (*delim == '-') {
 			at = delim + 1;
 			thru = strtoul(at, &delim, 10);
-		}
-		else {
+		} else {
 			printf("ERROR: invalid list '%s' in %s\n", buf, path);
 			return FILE_RES_ERROR;
 		}
@@ -182,9 +168,7 @@ read_list(const char* path, cpu_set_t* mask)
 	return FILE_RES_OK;
 }
 
-static file_res
-read_index(const char* path, uint16_t* val)
-{
+static file_res read_index(const char *path, uint16_t *val) {
 	char buf[100];
 	size_t limit = sizeof(buf);
 	file_res res = read_file(path, buf, &limit);
@@ -195,7 +179,7 @@ read_index(const char* path, uint16_t* val)
 
 	buf[limit - 1] = '\0';
 
-	char* end;
+	char *end;
 	uint64_t x = strtoul(buf, &end, 10);
 
 	if (*end != '\0' || x >= CPU_SETSIZE) {
@@ -203,14 +187,12 @@ read_index(const char* path, uint16_t* val)
 		return FILE_RES_ERROR;
 	}
 
-	*val = (uint16_t)x;
+	*val = (uint16_t) x;
 
 	return FILE_RES_OK;
 }
 
-static file_res
-read_file(const char* path, void* buf, size_t* limit)
-{
+static file_res read_file(const char *path, void *buf, size_t *limit) {
 	int32_t fd = open(path, O_RDONLY);
 
 	if (fd < 0) {
@@ -219,14 +201,14 @@ read_file(const char* path, void* buf, size_t* limit)
 		}
 
 		printf("ERROR: couldn't open file %s for reading: %d '%s'\n", path,
-				errno, asmt_strerror(errno));
+		errno, asmt_strerror(errno));
 		return FILE_RES_ERROR;
 	}
 
 	size_t total = 0;
 
 	while (total < *limit) {
-		ssize_t len = read(fd, (uint8_t*)buf + total, *limit - total);
+		ssize_t len = read(fd, (uint8_t*) buf + total, *limit - total);
 
 		if (len < 0) {
 			printf("ERROR: couldn't read file %s: %d '%s'\n", path, errno,
@@ -239,7 +221,7 @@ read_file(const char* path, void* buf, size_t* limit)
 			break; // EOF
 		}
 
-		total += (size_t)len;
+		total += (size_t) len;
 	}
 
 	close(fd);
