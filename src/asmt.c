@@ -98,6 +98,7 @@ typedef struct as_file_s {
 // Information about a file I/O.
 
 typedef struct as_io_s {
+	key_t key;
 	int fd;
 	bool write;
 	void* memptr;
@@ -386,17 +387,19 @@ static bool zread_file(int fd, void* buf, size_t filsz, size_t segsz, int shmid,
 static bool analyze_restore(void);
 static bool analyze_restore_candidate(as_file_t* files, uint32_t n_files,
 		uint32_t base_ix);
-static bool analyze_restore_sanity(as_file_t* files, uint32_t base_ix,
-		uint32_t n_stages);
-static void display_files(as_file_t *files, uint32_t base_ix, uint32_t n_stages);
-static bool restore_candidate(as_file_t* files, uint32_t base_ix,
-		uint32_t n_stages);
-static void restore_candidate_cleanup(int* shmids, as_io_t ios[], uint32_t idx,
-		uint32_t step, bool remove_segments);
-static bool restore_candidate_segment(as_file_t* files, as_io_t ios[],
-		int* shmids, uint32_t base_ix, uint32_t idx);
-static bool restore_candidate_check_crc32(as_file_t* files, as_io_t ios[],
-		uint32_t base_ix, uint32_t n_stages);
+static bool analyze_restore_sanity(as_file_t* pbp, as_file_t* ptp,
+		as_file_t psps[], uint32_t n_psps, as_file_t* smp,
+		as_file_t ssps[], uint32_t n_ssps);
+static void display_files(as_file_t* pbp, as_file_t* ptp, as_file_t psps[],
+		uint32_t n_psps, as_file_t* smp, as_file_t ssps[], uint32_t n_ssps);
+static bool restore_candidate(as_file_t* pbp, as_file_t* ptp, as_file_t psps[],
+		uint32_t n_psps, as_file_t* smp, as_file_t ssps[], uint32_t n_ssps);
+static void restore_candidate_cleanup(as_io_t ios[], uint32_t n_ios,
+		bool remove_segments);
+static bool restore_candidate_segment(as_file_t *file, as_io_t *io, as_io_t ios[],
+		uint32_t n_ios, as_file_t *pbp, as_file_t *ptp, as_file_t psps[],
+		uint32_t n_psps, as_file_t *smp, as_file_t ssps[], uint32_t n_ssps);
+static bool restore_candidate_check_crc32(as_io_t ios[], uint32_t n_ios);
 static bool validate_file_name(const char* pathname, as_file_t* file);
 static bool list_files(as_file_t** files, uint32_t* n_files, int* error);
 static int qsort_compare_files(const void* left, const void* right);
@@ -1301,12 +1304,14 @@ stat_segment(int shmid, as_segment_t** segment, int* error)
 // Determine whether a candidate base segment can be backed up.
 
 static bool
-analyze_backup_candidate(as_segment_t* segments,
-		uint32_t n_segments, uint32_t base_ix)
+analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
+		uint32_t base_ix)
 {
 	// Shortcut for primary base segment.
 
 	as_segment_t* pbp = &segments[base_ix];
+
+	assert(pbp->type == TYPE_BASE);
 
 	// Shortcuts for instance and namespace values.
 
@@ -1333,6 +1338,7 @@ analyze_backup_candidate(as_segment_t* segments,
 			printf("Missing treex segment for instance %u"
 					", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 		}
+
 		return false;
 	}
 
@@ -1352,9 +1358,10 @@ analyze_backup_candidate(as_segment_t* segments,
 
 	if (n_psps < 1) {
 		if (g_verbose) {
-			printf("Missing primary stage segments for instance %u"
+			printf("Missing primary stage segment(s) for instance %u"
 					", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 		}
+
 		return false;
 	}
 
@@ -1375,6 +1382,7 @@ analyze_backup_candidate(as_segment_t* segments,
 
 			if (jp->stage == ix + (uint32_t)AS_XMEM_ARENA_KEY) {
 				found = true;
+				break;
 			}
 		}
 
@@ -1397,7 +1405,6 @@ analyze_backup_candidate(as_segment_t* segments,
 		as_segment_t* sp = &segments[ix];
 
 		if (sp->type == TYPE_META && sp->nsid == nsid && sp->inst == inst) {
-
 			smp = sp;
 			n_smps++;
 		}
@@ -1567,7 +1574,7 @@ display_segments(as_segment_t* pbp, as_segment_t* ptp,
 			segment = ptp;
 		}
 		else if (i < 1 + 2 + n_psps) {
-			segment = &psps[i - 3];
+			segment = &psps[i - (1 + 2)];
 		}
 		else if (i == 1 + 2 + n_psps) {
 			segment = smp;
@@ -1653,6 +1660,8 @@ display_segments(as_segment_t* pbp, as_segment_t* ptp,
 		case TYPE_SEC_STAGE:
 			sprintf(buffer, "si-stage");
 			break;
+		default:
+			assert(false);
 		}
 
 		table[i][10] = strdup(buffer);
@@ -1945,6 +1954,7 @@ backup_candidate_file(as_segment_t* sp, as_io_t* io, as_io_t ios[],
 
 	// Create an I/O request for the segment.
 
+	io->key = sp->key;
 	io->write = true;
 	io->memptr = memptr;
 	io->filsz = 0;
@@ -2839,7 +2849,7 @@ zread_file(int fd, void* buf, size_t filsz, size_t segsz, int shmid,
 	// Set segment ownership
 
 	struct shmid_ds shmid_ds = { .shm_perm.uid = uid, .shm_perm.gid = gid,
-			.shm_perm.mode = (int)(mode & MODE_MASK), };
+			.shm_perm.mode = (short unsigned)(mode & MODE_MASK), };
 
 	if (shmctl(shmid, IPC_SET, &shmid_ds) == -1) {
 		char errbuff[MAX_BUFFER];
@@ -2902,7 +2912,7 @@ pread_file(int fd, void* buf, size_t segsz, int shmid, mode_t mode,
 		// Set segment ownership.
 
 		struct shmid_ds shmid_ds = { .shm_perm.uid = uid, .shm_perm.gid = gid,
-				.shm_perm.mode = (int)(mode & MODE_MASK), };
+				.shm_perm.mode = (short unsigned)(mode & MODE_MASK), };
 
 		if (shmctl(shmid, IPC_SET, &shmid_ds) == -1) {
 			char errbuff[MAX_BUFFER];
@@ -2949,18 +2959,22 @@ analyze_restore(void)
 
 		if (g_verbose) {
 			printf("\nDid not find any Aerospike database segment files");
+
 			if (g_inst != INV_INST) {
 				printf(", instance %u", g_inst);
 			}
+
 			if (g_nsnm != NULL) {
 				printf(", namespace \'%s\'", g_nsnm);
 			}
+
 			if (error != 0) {
 				char errbuff[MAX_BUFFER];
 				char *errout = strerror_r(errno, errbuff, MAX_BUFFER);
 
 				printf(": error was %d: %s", error, errout);
 			}
+
 			printf(".\n");
 		}
 
@@ -2983,17 +2997,18 @@ analyze_restore(void)
 
 	// Look for files that can be restored.
 	// Must have one base segment file, one treex segment file,
-	// and at least one stage segment file.
+	// and at least one primary stage segment file.
+	// May have one meta file and if so, at least one secondary stage segment file.
 
 	bool candidates = false;
 
-	for (uint32_t i = 0; i < n_files; i++) {
-		as_file_t* file = &files[i];
+	for (uint32_t ix = 0; ix < n_files; ix++) {
+		as_file_t* file = &files[ix];
 
 		if (file->type == TYPE_BASE) {
 			candidates = true;
 
-			if (!analyze_restore_candidate(files, n_files, i)) {
+			if (!analyze_restore_candidate(files, n_files, ix)) {
 
 				for (uint32_t j = 0; j < n_files; j++) {
 					as_file_t* fp = &files[j];
@@ -3029,8 +3044,8 @@ analyze_restore(void)
 
 	// Free table created by list_files().
 
-	for (uint32_t j = 0; j < n_files; j++) {
-		as_file_t* fp = &files[j];
+	for (uint32_t jx = 0; jx < n_files; jx++) {
+		as_file_t* fp = &files[jx];
 
 		if (fp->type == TYPE_BASE && fp->nsnm != NULL) {
 			free(fp->nsnm);
@@ -3050,64 +3065,190 @@ static bool
 analyze_restore_candidate(as_file_t* files, uint32_t n_files,
 		uint32_t base_ix)
 {
-	// There must be a base segment file, a treex segment file, and
-	// at least one stage segment file for restore to be possible.
+	// Extract the base segment file.
 
-	if (base_ix > n_files - 3) {
-		return false;
-	}
+	as_file_t* pbp = &files[base_ix];
 
-	as_file_t* bp = &files[base_ix];
+	assert (pbp->type == TYPE_BASE);
 
-	uint32_t inst = bp->inst;
-	uint32_t nsid = bp->nsid;
+	uint32_t inst = pbp->inst;
+	uint32_t nsid = pbp->nsid;
+	char* nsnm = pbp->nsnm;
 
-	// The corresponding treex segment file should be next in table.
+	// Find the corresponding treex segment file.
 
-	as_file_t* tp = &files[base_ix + 1];
+	as_file_t* ptp = NULL;
+	uint32_t n_ptps = 0;
 
-	if (tp->inst != inst || tp->nsid != nsid || tp->type != TYPE_TREEX) {
-		return false;
-	}
-
-	// The next entries must be stage segment files, in order and contiguous.
-
-	uint32_t n_stages = 0;
-
-	for (uint32_t i = base_ix + 2; i < n_files; i++) {
-		as_file_t* ip = &files[i];
-
-		if (ip->inst != inst || ip->nsid != nsid
-				|| ip->type != TYPE_PRI_STAGE) {
-			break;
+	for (uint32_t ix = 0; ix < n_files; ix++) {
+		if (ix == base_ix) {
+			continue;
 		}
 
-		// If stage numbers are not contiguous, bail out.
+		as_file_t* sp = &files[ix];
 
-		if (ip->stage != n_stages + (uint32_t)AS_XMEM_ARENA_KEY) {
+		if (sp->type == TYPE_TREEX && sp->inst == inst && sp->nsid == nsid) {
+			ptp = sp;
+			n_ptps++;
+		}
+	}
+
+	if (n_ptps != 1) {
+		if (g_verbose) {
+			printf("Missing treex segment file.\n");
+		}
+
+		return false;
+	}
+
+	// Find the primary stage segment files.
+
+	as_file_t psps[MAX_PRI_STAGES] = { 0 };
+	uint32_t n_psps = 0;
+
+	for (uint32_t ix = 0; ix < n_files; ix++) {
+		as_file_t* sp = &files[ix];
+
+		if (sp->type == TYPE_PRI_STAGE && sp->nsid == nsid
+				&& sp->inst == inst) {
+			psps[n_psps++] = *sp;
+		}
+	}
+
+	if (n_psps < 1) {
+		if (g_verbose) {
+			printf("Missing primary stage segment file(s) for instance %u"
+					", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
+		}
+
+		return false;
+	}
+
+	// Sort the primary stage segment files by key.
+
+	if (n_psps > 1) {
+		qsort((void*)psps, (size_t)n_psps, sizeof(as_file_t),
+				qsort_compare_files);
+	}
+
+	// Check that all primary stage files are present.
+
+	for (uint32_t ix = 0; ix < n_psps; ix++) {
+		bool found = false;
+
+		for (uint32_t jx = 0; jx < n_psps; jx++) {
+			as_file_t* jp = &psps[jx];
+
+			if (jp->stage == ix + (uint32_t)AS_XMEM_ARENA_KEY) {
+				found = true;
+				break;
+			}
+		}
+
+		if (!found) {
+			if (g_verbose) {
+				printf("Missing primary stage segment file %03x for instance %u"
+						", namespace \'%s\' (nsid %d).\n",
+						ix + (uint32_t)AS_XMEM_ARENA_KEY, inst, nsnm, nsid);
+			}
+
+			return false;
+		}
+	}
+
+	// Find the meta segment file (if any).
+
+	as_file_t* smp = NULL;
+	uint32_t n_smps = 0;
+
+	for (uint32_t ix = 0; ix < n_files; ix++) {
+		as_file_t* sp = &files[ix];
+
+		if (sp->type == TYPE_META && sp->nsid == nsid && sp->inst == inst) {
+			smp = sp;
+			n_smps++;
+		}
+	}
+
+	if (n_smps > 1) {
+		if (g_verbose) {
+			printf("Too many meta segment files for instance %u"
+					", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
+		}
+
+		return false;
+	}
+
+	as_file_t ssps[MAX_SEC_STAGES] = { 0 };
+	uint32_t n_ssps = 0;
+
+	// Found a meta segment file?
+
+	if (n_smps == 1) {
+
+		// Find the secondary stage segment files.
+
+		for (uint32_t ix = 0; ix < n_files; ix++) {
+			as_file_t* sp = &files[ix];
+
+			if (sp->type == TYPE_SEC_STAGE && sp->nsid == nsid
+					&& sp->inst == inst) {
+				ssps[n_ssps++] = *sp;
+			}
+		}
+
+		if (n_ssps < 1) {
+			if (g_verbose) {
+				printf("No secondary stage segment files for instance %u"
+						", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
+			}
+
 			return false;
 		}
 
-		n_stages++;
-	}
+		// Sort the secondary stage segment files by key.
 
-	// If we didn't find at least one stage segment file, give up.
+		if (n_ssps > 1) {
+			qsort((void*)ssps, (size_t)n_ssps, sizeof(as_file_t),
+					qsort_compare_files);
+		}
 
-	if (n_stages == 0) {
-		return false;
+		// Check that all secondary stage files are present.
+
+		for (uint32_t ix = 0; ix < n_ssps; ix++) {
+			bool found = false;
+
+			for (uint32_t jx = 0; jx < n_ssps; jx++) {
+				as_file_t* jp = &ssps[jx];
+
+				if (jp->stage == ix + (uint32_t)AS_XMEM_ARENA_KEY) {
+					found = true;
+				}
+			}
+
+			if (!found) {
+				if (g_verbose) {
+					printf(
+							"Missing secondary stage segment file %03x for instance %u"
+									", namespace \'%s\' (nsid %d).\n",
+							ix + (uint32_t)AS_XMEM_ARENA_KEY, inst, nsnm, nsid);
+				}
+				return false;
+			}
+		}
 	}
 
 	// If verbose, display a list of matching segment files.
 
 	if (g_verbose) {
 		printf("\n");
-		display_files(files, base_ix, n_stages);
+		display_files(pbp, ptp, psps, n_psps, smp, ssps, n_ssps);
 		printf("\n");
 	}
 
 	// Perform a final sanity check on this restore candidate.
 
-	if (!analyze_restore_sanity(files, base_ix, n_stages)) {
+	if (!analyze_restore_sanity(pbp, ptp, psps, n_psps, smp, ssps, n_ssps)) {
 		if (g_verbose) {
 			printf("Failed restore sanity check for instance %u"
 					", namespace \'%s\' (nsid %d).\n", files[base_ix].inst,
@@ -3124,8 +3265,8 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files,
 			// Print command to restore these segment files.
 
 			printf("%s -r", g_progname);
-			printf(" -i %u", files[base_ix].inst);
-			printf(" -n %s", files[base_ix].nsnm);
+			printf(" -i %u", inst);
+			printf(" -n %s", nsnm);
 			printf(" -p %s", g_pathdir);
 
 			if (g_crc32) {
@@ -3140,18 +3281,20 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files,
 	else {
 		// Actually perform restores...
 
-		return restore_candidate(files, base_ix, n_stages);
+		return restore_candidate(pbp, ptp, psps, n_psps, smp, ssps, n_ssps);
 	}
 }
 
 // Display a list of segment files to ba restored.
 
 static void
-display_files(as_file_t* files, uint32_t base_ix, uint32_t n_stages)
+display_files(as_file_t* pbp, as_file_t* ptp, as_file_t psps[], uint32_t n_psps,
+		as_file_t* smp, as_file_t ssps[], uint32_t n_ssps)
 {
 	// The table to be displayed.
 
-	char* table[n_stages + 3][11];
+	uint32_t n_rows = 1 + 2 + n_psps + (n_ssps > 0 ? (1 + n_ssps) : 0);
+	char* table[n_rows][11];
 
 	// Create the table header.
 
@@ -3171,11 +3314,27 @@ display_files(as_file_t* files, uint32_t base_ix, uint32_t n_stages)
 
 	char buffer[MAX_BUFFER];
 
-	for (uint32_t i = 0; i < n_stages + 2; i++) {
-		as_file_t* file = &files[base_ix + i];
+	for (uint32_t i = 1; i < n_rows; i++) {
+		as_file_t* file;
+
+		if (i == 1) {
+			file = pbp;
+		}
+		else if (i == 2) {
+			file = ptp;
+		}
+		else if (i < 1 + 2 + n_psps) {
+			file = &psps[i - (1 + 2)];
+		}
+		else if (i == 1 + 2 + n_psps) {
+			file = smp;
+		}
+		else if (i > 1 + 2 + n_psps) {
+			file = &ssps[i - (1 + 2 + n_psps + 1)];
+		}
 
 		sprintf(buffer, "%08x", file->key);
-		table[i + 1][0] = strdup(buffer);
+		table[i][0] = strdup(buffer);
 
 		struct passwd* pw;
 
@@ -3185,7 +3344,7 @@ display_files(as_file_t* files, uint32_t base_ix, uint32_t n_stages)
 		else {
 			sprintf(buffer, "%s", pw->pw_name);
 		}
-		table[i + 1][1] = strdup(buffer);
+		table[i][1] = strdup(buffer);
 
 		struct group* gr;
 
@@ -3195,22 +3354,22 @@ display_files(as_file_t* files, uint32_t base_ix, uint32_t n_stages)
 		else {
 			sprintf(buffer, "%s", gr->gr_name);
 		}
-		table[i + 1][2] = strdup(buffer);
+		table[i][2] = strdup(buffer);
 
 		sprintf(buffer, "0%o", file->mode);
-		table[i + 1][3] = strdup(buffer);
+		table[i][3] = strdup(buffer);
 
 		sprintf(buffer, "%lu", file->filsz);
-		table[i + 1][4] = strdup(buffer);
+		table[i][4] = strdup(buffer);
 
 		sprintf(buffer, "%lu", file->segsz);
-		table[i + 1][5] = strdup(buffer);
+		table[i][5] = strdup(buffer);
 
 		sprintf(buffer, "%u", file->inst);
-		table[i + 1][6] = strdup(buffer);
+		table[i][6] = strdup(buffer);
 
 		sprintf(buffer, "%u", file->nsid);
-		table[i + 1][7] = strdup(buffer);
+		table[i][7] = strdup(buffer);
 
 		if (file->type == TYPE_BASE) {
 			sprintf(buffer, "%s", file->nsnm == NULL ? "<null>" : file->nsnm);
@@ -3218,50 +3377,56 @@ display_files(as_file_t* files, uint32_t base_ix, uint32_t n_stages)
 		else {
 			sprintf(buffer, "-");
 		}
-		table[i + 1][8] = strdup(buffer);
+		table[i][8] = strdup(buffer);
 
 		switch (file->type) {
 		case TYPE_BASE:
-			sprintf(buffer, "base");
+			sprintf(buffer, "pi-base");
 			break;
 		case TYPE_META:
-			sprintf(buffer, "meta");
+			sprintf(buffer, "si-meta");
 			break;
 		case TYPE_TREEX:
-			sprintf(buffer, "treex");
+			sprintf(buffer, "pi-treex");
 			break;
 		case TYPE_PRI_STAGE:
-		case TYPE_SEC_STAGE:
-			sprintf(buffer, "stage");
+			sprintf(buffer, "pi-stage");
 			break;
+		case TYPE_SEC_STAGE:
+			sprintf(buffer, "si-stage");
+			break;
+		default:
+			assert(false);
 		}
-		table[i + 1][9] = strdup(buffer);
+		table[i][9] = strdup(buffer);
 
-		if (file->type == TYPE_PRI_STAGE) {
+		if (file->type == TYPE_PRI_STAGE || file->type == TYPE_SEC_STAGE) {
 			sprintf(buffer, "%03x", file->stage);
 		}
 		else {
 			sprintf(buffer, "-");
 		}
-		table[i + 1][10] = strdup(buffer);
+		table[i][10] = strdup(buffer);
 	}
 
 	// Draw the table. All allocated entries will be freed.
 
-	draw_table(&table[0][0], n_stages + 3, 11);
+	draw_table(&table[0][0], n_rows, 11);
 }
 
 static bool
-analyze_restore_sanity(as_file_t* files, uint32_t base_ix,
-		uint32_t n_stages)
+analyze_restore_sanity(as_file_t* pbp, as_file_t* ptp, as_file_t psps[],
+		uint32_t n_psps, as_file_t* smp, as_file_t ssps[], uint32_t n_ssps)
 {
-	// Check that the number of stages is valid.
+	(void)ptp;
+	(void)psps;
+	(void)ssps;
 
-	as_file_t* bp = &files[base_ix];
+	// Check that the number of stages is valid.
 
 	char pathname[PATH_MAX + 1];
 
-	sprintf(pathname, "%s/%08x%s", g_pathdir, bp->key, FILE_EXTENSION);
+	sprintf(pathname, "%s/%08x%s", g_pathdir, pbp->key, FILE_EXTENSION);
 
 	// Extract arena stage count name from file.
 
@@ -3357,10 +3522,10 @@ analyze_restore_sanity(as_file_t* files, uint32_t base_ix,
 
 	close(fd);
 
-	if (u2.n_arenas != n_stages) {
+	if (u2.n_arenas != n_psps) {
 		if (g_verbose) {
 			printf("Incorrect number of arena stages found"
-					": expecting %u, found %u.\n", u2.n_arenas, n_stages);
+					": expecting %u, found %u.\n", u2.n_arenas, n_psps);
 		}
 
 		return false;
@@ -3423,12 +3588,12 @@ analyze_restore_sanity(as_file_t* files, uint32_t base_ix,
 
 		// Check whether instance and namespace match.
 
-		if (nsid == bp->nsid && inst == bp->inst) {
+		if (nsid == pbp->nsid && inst == pbp->inst) {
 			if (g_verbose) {
 				printf("Found existing shared memory segment %08x with"
 						" instance %u, namespace \'%s\' (nsid %u)"
 						": cannot restore segment.\n", ds.shm_perm.__key, inst,
-						bp->nsnm, nsid);
+						pbp->nsnm, nsid);
 			}
 
 			found = true;
@@ -3442,32 +3607,73 @@ analyze_restore_sanity(as_file_t* files, uint32_t base_ix,
 // Actually restore candidate set of segment files.
 
 static bool
-restore_candidate(as_file_t* files, uint32_t base_ix,
-		uint32_t n_stages)
+restore_candidate(as_file_t* pbp, as_file_t* ptp, as_file_t psps[],
+		uint32_t n_psps, as_file_t* smp, as_file_t ssps[], uint32_t n_ssps)
 {
 	// Create list of file I/O requests.
 
-	as_io_t ios[n_stages + 2];
-	int shmids[n_stages + 2];
+	uint32_t n_files = 1 + 1 + n_psps;
 
-	for (uint32_t i = 0; i < n_stages + 2; i++) {
-		if (!restore_candidate_segment(files, ios, &shmids[0], base_ix, i)) {
+	if (n_ssps > 0) {
+		n_files += 1 + n_ssps;
+	}
+
+	as_io_t ios[n_files];
+	uint32_t n_ios = 0;
+
+	if (!restore_candidate_segment(pbp, &ios[n_ios], ios, n_ios, pbp, ptp, psps, n_psps,
+			smp, ssps, n_ssps)) {
+		return false;
+	}
+
+	n_ios++;
+
+	if (!restore_candidate_segment(ptp, &ios[n_ios], ios, n_ios, pbp, ptp, psps, n_psps,
+			smp, ssps, n_ssps)) {
+		return false;
+	}
+
+	n_ios++;
+
+	for (uint32_t i = 0; i < n_psps; i++) {
+		if (!restore_candidate_segment(&psps[i], &ios[n_ios], ios, n_ios, pbp, ptp, psps,
+				n_psps, smp, ssps, n_ssps)) {
 			return false;
+		}
+
+		n_ios++;
+	}
+
+	if (n_ssps > 0) {
+		if (!restore_candidate_segment(smp, &ios[n_ios], ios, n_ios, pbp, ptp, psps,
+				n_psps, smp, ssps, n_ssps)) {
+			return false;
+		}
+
+		n_ios++;
+
+		for (uint32_t i = 0; i < n_ssps; i++) {
+			if (!restore_candidate_segment(&ssps[i], &ios[n_ios], ios, n_ios, pbp, ptp,
+					psps, n_psps, smp, ssps, n_ssps)) {
+				return false;
+			}
+
+			n_ios++;
 		}
 	}
 
+	assert(n_files == n_ios);
+
 	// Hand the file I/O requests in for processing.
 
-	bool success = start_io(ios, n_stages + 2);
+	bool success = start_io(ios, n_ios);
 
-	// If requested, check crc32 values.
+	// I/O requests were processed. Now post-process.
 
 	if (success && g_crc32) {
-		if (!restore_candidate_check_crc32(files, ios, base_ix, n_stages)) {
-			if (!success) {
-				if (g_verbose) {
-					printf("crc32 check failed.\n\n");
-				}
+		if (!restore_candidate_check_crc32(ios, n_ios)) {
+			if (g_verbose) {
+				printf("crc32 mismatch.\n\n");
 			}
 
 			success = false;
@@ -3477,13 +3683,13 @@ restore_candidate(as_file_t* files, uint32_t base_ix,
 	// Notify the user of success or failure.
 
 	if (g_verbose) {
-		as_file_t* fp = &files[base_ix];
+		as_file_t* fp = pbp;
 
 		if (g_verbose) {
 			printf("%s",
 					success ?
 							"\nSuccessfully restored" : "\nFailed to restore");
-			printf(" %u Aerospike database segment files", n_stages + 2);
+			printf(" %u Aerospike database segment files",n_files);
 			printf(" for instance %u, namespace \'%s\' (nsid %u).\n", fp->inst,
 					fp->nsnm == NULL ? "<null>" : fp->nsnm, fp->nsid);
 		}
@@ -3492,24 +3698,21 @@ restore_candidate(as_file_t* files, uint32_t base_ix,
 	// Clean up all intermediate operations.
 	// On failure, will destroy all created segments.
 
-	restore_candidate_cleanup(&shmids[0], &ios[0], n_stages + 1, 4, !success);
+	restore_candidate_cleanup(ios, n_ios, !success);
 
 	return success;
 }
 
 static bool
-restore_candidate_segment(as_file_t* files, as_io_t ios[],
-		int* shmids, uint32_t base_ix, uint32_t idx)
+restore_candidate_segment(as_file_t *file, as_io_t *io, as_io_t ios[],
+		uint32_t n_ios, as_file_t *pbp, as_file_t *ptp, as_file_t psps[],
+		uint32_t n_psps, as_file_t *smp, as_file_t ssps[], uint32_t n_ssps)
 {
-	as_file_t* file = &files[base_ix + idx];
-	as_io_t* io = &ios[idx];
-	int* shmidp = &shmids[idx];
-
 	// Try to create the segment.
 
-	*shmidp = shmget(file->key, file->segsz, SHMGET_FLAGS_CREATE_ONLY);
+	int shmid = shmget(file->key, file->segsz, SHMGET_FLAGS_CREATE_ONLY);
 
-	if (*shmidp < 0) {
+	if (shmid < 0) {
 		int error = (errno == ENOENT) ? EEXIST : errno;
 		char errbuff[MAX_BUFFER];
 		char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
@@ -3521,14 +3724,14 @@ restore_candidate_segment(as_file_t* files, as_io_t ios[],
 
 		// Clean up all intermediate operations.
 
-		restore_candidate_cleanup(shmids, ios, idx, 1, true);
+		restore_candidate_cleanup(ios, n_ios, true);
 
 		return false;
 	}
 
 	// Attach to the segment (for writing).
 
-	void* memptr = shmat(*shmidp, NULL, 0);
+	void* memptr = shmat(shmid, NULL, 0);
 
 	// See if the segment was attached.
 	// Can not operate on segments that are in use.
@@ -3544,18 +3747,19 @@ restore_candidate_segment(as_file_t* files, as_io_t ios[],
 
 		// Clean up all intermediate operations.
 
-		restore_candidate_cleanup(shmids, ios, idx, 2, true);
+		restore_candidate_cleanup(ios, n_ios, true);
 
 		return false;
 	}
 
 	// Create I/O request for segment file.
 
+	io->key = file->key;
 	io->write = false;
 	io->memptr = memptr;
 	io->filsz = file->filsz;
 	io->segsz = file->segsz;
-	io->shmid = *shmidp;
+	io->shmid = shmid;
 	io->mode = file->mode;
 	io->uid = file->uid;
 	io->gid = file->gid;
@@ -3587,7 +3791,7 @@ restore_candidate_segment(as_file_t* files, as_io_t ios[],
 
 		// Clean up all intermediate operations.
 
-		restore_candidate_cleanup(shmids, ios, idx, 3, true);
+		restore_candidate_cleanup(ios, n_ios, true);
 
 		return false;
 	}
@@ -3600,19 +3804,17 @@ restore_candidate_segment(as_file_t* files, as_io_t ios[],
 }
 
 static bool
-restore_candidate_check_crc32(as_file_t* files, as_io_t ios[],
-		uint32_t base_ix, uint32_t n_stages)
+restore_candidate_check_crc32(as_io_t ios[], uint32_t n_ios)
 {
 	// Check crc32 for each restored segment.
 
 	uint32_t i;
-	for (i = 0; i < n_stages + 2; i++) {
-		as_file_t* file = &files[base_ix + i];
+	for (i = 0; i < n_ios; i++) {
 		as_io_t* io = &ios[i];
 
 		// Get the shared memory ID of this segment.
 
-		int shmid = shmget(file->key, file->segsz, 0);
+		int shmid = shmget(ios[i].key, ios[i].segsz, 0);
 
 		if (shmid < 0) {
 			return false;
@@ -3628,7 +3830,7 @@ restore_candidate_check_crc32(as_file_t* files, as_io_t ios[],
 
 		// Actually compute the crc32 for this segment.
 
-		uLong segment_crc32 = crc32(g_crc32_init, memptr, (uInt)file->segsz);
+		uLong segment_crc32 = crc32(g_crc32_init, memptr, (uInt)ios[i].segsz);
 		shmdt(memptr);
 
 		// Compare the crc32 value just computed with the one computed
@@ -3646,53 +3848,41 @@ restore_candidate_check_crc32(as_file_t* files, as_io_t ios[],
 // If remove is set, all segments created should be removed.
 
 static void
-restore_candidate_cleanup(int* shmids, as_io_t ios[], uint32_t idx,
-		uint32_t step, bool remove_segments)
+restore_candidate_cleanup(as_io_t ios[], uint32_t n_ios, bool remove_segments)
 {
-	// Destroy all created segments in case of failure.
+	// Close all opened files.
 
-	if (remove_segments) {
-		for (uint32_t i = 0; i <= idx; i++) {
-			struct shmid_ds ds; // Dummy.
+	for (uint32_t i = 0; i <= n_ios; i++) {
+		as_io_t *io = &ios[i];
 
-			// Skip if didn't finish shmget(2) on last segment.
+		// Close the file.
 
-			if (i == idx && step == 1) {
-				continue;
-			}
+		close(io->fd);
+	}
 
-			// Destroy this segment.
-
-			shmctl(shmids[i], IPC_RMID, &ds);
-		}
+	if (!remove_segments) {
+		return;
 	}
 
 	// Detach all attached segments.
 
-	for (uint32_t i = 0; i <= idx; i++) {
-		// Skip if didn't finish shmat(2) on last segment.
-
-		if (i == idx && step <= 2) {
-			continue;
-		}
+	for (uint32_t i = 0; i <= n_ios; i++) {
+		as_io_t *io = &ios[i];
 
 		// Detach this segment.
 
-		shmdt(ios[i].memptr);
+		shmdt(io->memptr);
 	}
 
-	// Close all opened files.
+	// Destroy all created segments in case of failure.
 
-	for (uint32_t i = 0; i <= idx; i++) {
-		// Skip if didn't finish open(2) on last segment.
+	for (uint32_t i = 0; i <= n_ios; i++) {
+		as_io_t *io = &ios[i];
+		struct shmid_ds ds; // Dummy.
 
-		if (i == idx && step <= 3) {
-			continue;
-		}
+		// Destroy this segment.
 
-		// Close the file.
-
-		close(ios[i].fd);
+		shmctl(io->shmid, IPC_RMID, &ds);
 	}
 }
 
@@ -3779,6 +3969,7 @@ validate_file_name(const char* pathname, as_file_t* file)
 	}
 
 	if (!primary && !secondary) {
+		// Not an Aerospike database file.
 		free(old_ptr);
 		return false;
 	}
@@ -3798,11 +3989,12 @@ validate_file_name(const char* pathname, as_file_t* file)
 			>> AS_XMEM_NS_KEY_SHIFT;
 
 	if (file->nsid < MIN_NSID || file->nsid > MAX_NSID) {
+		// Invalid instance.
 		free(old_ptr);
 		return false;
 	}
 
-	// Extract segment type from key base.
+	// Extract file type from key base.
 
 	key = key & ~(0xff << AS_XMEM_NS_KEY_SHIFT);
 
@@ -3816,6 +4008,7 @@ validate_file_name(const char* pathname, as_file_t* file)
 		file->type = primary ? TYPE_BASE : TYPE_META;
 	}
 	else {
+		// Not a valid Aerospike file type.
 		free(old_ptr);
 		return false;
 	}
@@ -3825,8 +4018,10 @@ validate_file_name(const char* pathname, as_file_t* file)
 	file->stage =
 			(file->type == TYPE_PRI_STAGE || file->type == TYPE_SEC_STAGE) ?
 					(uint32_t)key : 0;
+
 	if ((file->type == TYPE_PRI_STAGE || file->type == TYPE_SEC_STAGE)
 			&& (file->stage < MIN_ARENA || file->stage > MAX_ARENA)) {
+		// Not a valid stage.
 		free(old_ptr);
 		return false;
 	}
@@ -3851,10 +4046,9 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 
 	if (dir == NULL) {
 		*error = errno;
-		char errbuff[MAX_BUFFER];
-		char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
-
 		if (g_verbose) {
+			char errbuff[MAX_BUFFER];
+			char *errout = strerror_r(errno, errbuff, MAX_BUFFER);
 			printf("Cannot open directory \'%s\': error was %d: %s.\n",
 					g_pathdir, *error, errout);
 		}
@@ -3895,7 +4089,7 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 				char errbuff[MAX_BUFFER];
 				char *errout = strerror_r(errno, errbuff, MAX_BUFFER);
 
-				printf("Did not find info for Aerospike database segment"
+				printf("Did not find info for Aerospike database file"
 						" file \'%s\': error was %d: %s.\n", pathname, errno,
 						errout);
 			}
@@ -3913,6 +4107,7 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 
 		if (valid_file.type == TYPE_BASE) {
 			int rc = open(pathname, O_RDONLY);
+
 			if (rc < 0) {
 				continue;
 			}
@@ -3958,7 +4153,7 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 		size_t segsz;
 		bool compress;
 
-		if (valid_file.type != TYPE_BASE) {
+		if (valid_file.type != TYPE_BASE && valid_file.type != TYPE_META) {
 			char* dot_ptr = strchr(dirent->d_name, '.');
 
 			// Is this a compressed file?
@@ -4051,7 +4246,6 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 	if (*n_files > 0) {
 		qsort((void*)*files, (size_t)*n_files, sizeof(as_file_t),
 				qsort_compare_files);
-
 	}
 
 	return true;
