@@ -238,6 +238,16 @@ enum {
 	BASEVER_MAX = 10
 };
 
+// Shutdown status offset in base segment.
+enum {
+	BASESHUT_OFF = sizeof(uint32_t)
+};
+
+// Shutdown status length in base segment.
+enum {
+	BASESHUT_LEN = sizeof(uint32_t)
+};
+
 // Offset of namespace in base segment.
 enum {
 	NAMESPACE_OFF = 1024
@@ -1727,6 +1737,20 @@ analyze_backup_sanity(as_segment_t* pbp, as_segment_t* ptp,
 					" expecting version in range %u to %u"
 					", found version %u.\n", pbp->key, BASEVER_MIN, BASEVER_MAX,
 					base_ver);
+		}
+
+		return false;
+	}
+
+	// Check the base segment shutdown status.
+
+	uint32_t base_shut = *(uint32_t*)(memptr + BASESHUT_OFF);
+
+	if (base_shut != 1) {
+		if (g_verbose) {
+			printf("Shutdown status in base segment %08x:"
+					" expecting status 1"
+					", found status %u.\n", pbp->key, base_shut);
 		}
 
 		return false;
