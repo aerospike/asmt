@@ -235,7 +235,7 @@ enum {
 
 // Maximum acceptable version of base segment.
 enum {
-	BASEVER_MAX = 10
+	BASEVER_MAX = 11
 };
 
 // Shutdown status offset in base segment.
@@ -602,14 +602,14 @@ main(int argc, char* argv[])
 			else if (g_compress && g_crc32) {
 				printf(" with compression and crc32 checking");
 			}
-			printf(".\n");
+			printf(".\n\n");
 		}
 		else {
 			printf("Performing restore operation");
 			if (g_crc32) {
 				printf(" with crc32 checking");
 			}
-			printf(".\n");
+			printf(".\n\n");
 		}
 	}
 
@@ -962,7 +962,7 @@ analyze_backup(void)
 			if (!analyze_backup_candidate(segments, n_segments, i)) {
 				for (uint32_t j = 0; j < n_segments; j++) {
 					as_segment_t* sp = &segments[j];
-					if (sp->type == TYPE_BASE && sp->nsnm != NULL) {
+					if (sp->nsnm != NULL) {
 						free(sp->nsnm);
 					}
 				}
@@ -986,7 +986,7 @@ analyze_backup(void)
 
 	for (uint32_t j = 0; j < n_segments; j++) {
 		as_segment_t* sp = &segments[j];
-		if (sp->type == TYPE_BASE && sp->nsnm != NULL) {
+		if (sp->nsnm != NULL) {
 			free(sp->nsnm);
 		}
 	}
@@ -1322,6 +1322,7 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 	as_segment_t* pbp = &segments[base_ix];
 
 	assert(pbp->type == TYPE_BASE);
+	assert(pbp->nsnm != NULL);
 
 	// Shortcuts for instance and namespace values.
 
@@ -1339,6 +1340,7 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 
 		if (sp->type == TYPE_TREEX && sp->nsid == nsid && sp->inst == inst) {
 			ptp = sp;
+			ptp->nsnm = strdup(nsnm);
 			n_ptps++;
 		}
 	}
@@ -1348,6 +1350,8 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 			printf("Missing treex segment for instance %u"
 					", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 		}
+
+		// TODO: if (n_ptps > 1) will leak ptp->nsnm.
 
 		return false;
 	}
@@ -1362,7 +1366,9 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 
 		if (sp->type == TYPE_PRI_STAGE && sp->nsid == nsid
 				&& sp->inst == inst) {
-			psps[n_psps++] = *sp;
+			psps[n_psps] = *sp;
+			psps[n_psps].nsnm = strdup(nsnm);
+			n_psps++;
 		}
 	}
 
@@ -1371,6 +1377,8 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 			printf("Missing primary stage segment(s) for instance %u"
 					", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 		}
+
+		free(ptp->nsnm);
 
 		return false;
 	}
@@ -1402,6 +1410,13 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 						", namespace \'%s\' (nsid %d).\n",
 						ix + (uint32_t)AS_XMEM_ARENA_KEY, inst, nsnm, nsid);
 			}
+
+			free(ptp->nsnm);
+
+			for (uint32_t jx = 0; jx < n_psps; jx++) {
+				free(psps[jx].nsnm);
+			}
+
 			return false;
 		}
 	}
@@ -1416,6 +1431,7 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 
 		if (sp->type == TYPE_META && sp->nsid == nsid && sp->inst == inst) {
 			smp = sp;
+			smp->nsnm = strdup(nsnm);
 			n_smps++;
 		}
 	}
@@ -1425,6 +1441,15 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 			printf("Too many meta segments for instance %u"
 					", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 		}
+
+		free(ptp->nsnm);
+
+		for (uint32_t jx= 0; jx < n_psps; jx++) {
+			free(psps[jx].nsnm);
+		}
+
+		// TODO: If (n_smps > 1) will leak smp->nsnm.
+
 		return false;
 	}
 
@@ -1443,7 +1468,9 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 			if (sp->type == TYPE_SEC_STAGE && sp->nsid == nsid
 					&& sp->inst == inst) {
 
-				ssps[n_ssps++] = *sp;
+				ssps[n_ssps] = *sp;
+				ssps[n_ssps].nsnm = strdup(nsnm);
+				n_ssps++;
 			}
 		}
 
@@ -1452,6 +1479,15 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 				printf("No secondary stage segments for instance %u"
 						", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 			}
+
+			free(ptp->nsnm);
+
+			for (uint32_t jx= 0; jx < n_psps; jx++) {
+				free(psps[jx].nsnm);
+			}
+
+			free(smp->nsnm);
+
 			return false;
 		}
 
@@ -1483,6 +1519,19 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 							ix + (uint32_t)AS_XMEM_ARENA_KEY, inst, nsnm,
 							nsid);
 				}
+
+				free(ptp->nsnm);
+
+				for (uint32_t jx= 0; jx < n_psps; jx++) {
+					free(psps[jx].nsnm);
+				}
+
+				free(smp->nsnm);
+
+				for (uint32_t jx= 0; jx < n_ssps; jx++) {
+					free(ssps[jx].nsnm);
+				}
+
 				return false;
 			}
 		}
@@ -1503,6 +1552,19 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 			printf("Failed backup sanity check for instance %u"
 					", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 		}
+
+		free(ptp->nsnm);
+
+		for (uint32_t jx= 0; jx < n_psps; jx++) {
+			free(psps[jx].nsnm);
+		}
+
+		free(smp->nsnm);
+
+		for (uint32_t jx= 0; jx < n_ssps; jx++) {
+			free(ssps[jx].nsnm);
+		}
+
 		return false;
 	}
 
@@ -1525,12 +1587,38 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 			printf("\n");
 		}
 
+		free(ptp->nsnm);
+
+		for (uint32_t jx= 0; jx < n_psps; jx++) {
+			free(psps[jx].nsnm);
+		}
+
+		free(smp->nsnm);
+
+		for (uint32_t jx= 0; jx < n_ssps; jx++) {
+			free(ssps[jx].nsnm);
+		}
+
 		return true;
 	}
 
 	// Actually perform backup...
 
-	return backup_candidate(pbp, ptp, psps, n_psps, smp, ssps, n_ssps);
+	bool success =  backup_candidate(pbp, ptp, psps, n_psps, smp, ssps, n_ssps);\
+
+	free(ptp->nsnm);
+
+	for (uint32_t jx= 0; jx < n_psps; jx++) {
+		free(psps[jx].nsnm);
+	}
+
+	free(smp->nsnm);
+
+	for (uint32_t jx= 0; jx < n_ssps; jx++) {
+		free(ssps[jx].nsnm);
+	}
+
+	return success;
 }
 
 // qsort(3) comparison routine for shared memory segments.
@@ -1644,13 +1732,7 @@ display_segments(as_segment_t* pbp, as_segment_t* ptp,
 		sprintf(buffer, "%u", segment->nsid);
 		table[i][8] = strdup(buffer);
 
-		if (segment->type == TYPE_BASE) {
-			sprintf(buffer, "%s",
-					segment->nsnm == NULL ? "<null>" : segment->nsnm);
-		}
-		else {
-			sprintf(buffer, "-");
-		}
+		sprintf(buffer, "%s", segment->nsnm == NULL ? "-" : segment->nsnm);
 
 		table[i][9] = strdup(buffer);
 
@@ -3086,14 +3168,14 @@ analyze_restore(void)
 // Analyze whether to restore a candidate set of segment files.
 
 static bool
-analyze_restore_candidate(as_file_t* files, uint32_t n_files,
-		uint32_t base_ix)
+analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 {
 	// Extract the base segment file.
 
 	as_file_t* pbp = &files[base_ix];
 
-	assert (pbp->type == TYPE_BASE);
+	assert(pbp->type == TYPE_BASE);
+	assert(pbp->nsnm != NULL);
 
 	uint32_t inst = pbp->inst;
 	uint32_t nsid = pbp->nsid;
@@ -3113,6 +3195,7 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files,
 
 		if (sp->type == TYPE_TREEX && sp->inst == inst && sp->nsid == nsid) {
 			ptp = sp;
+			ptp->nsnm = strdup(nsnm);
 			n_ptps++;
 		}
 	}
@@ -3121,6 +3204,8 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files,
 		if (g_verbose) {
 			printf("Missing treex segment file.\n");
 		}
+
+		// TODO: If (n_ptps > 1) will leak ptp->nsnm;
 
 		return false;
 	}
@@ -3135,7 +3220,9 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files,
 
 		if (sp->type == TYPE_PRI_STAGE && sp->nsid == nsid
 				&& sp->inst == inst) {
-			psps[n_psps++] = *sp;
+			psps[n_psps] = *sp;
+			psps[n_psps].nsnm = strdup(nsnm);
+			n_psps++;
 		}
 	}
 
@@ -3144,6 +3231,8 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files,
 			printf("Missing primary stage segment file(s) for instance %u"
 					", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 		}
+
+		free(ptp->nsnm);
 
 		return false;
 	}
@@ -3176,6 +3265,12 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files,
 						ix + (uint32_t)AS_XMEM_ARENA_KEY, inst, nsnm, nsid);
 			}
 
+			free(ptp->nsnm);
+
+			for (uint32_t jx = 0; jx < n_psps; jx++) {
+				free(psps[jx].nsnm);
+			}
+
 			return false;
 		}
 	}
@@ -3190,6 +3285,7 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files,
 
 		if (sp->type == TYPE_META && sp->nsid == nsid && sp->inst == inst) {
 			smp = sp;
+			smp->nsnm = strdup(nsnm);
 			n_smps++;
 		}
 	}
@@ -3199,6 +3295,14 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files,
 			printf("Too many meta segment files for instance %u"
 					", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 		}
+
+		free(ptp->nsnm);
+
+		for (uint32_t jx= 0; jx < n_psps; jx++) {
+			free(psps[jx].nsnm);
+		}
+
+		// TODO: If (n_smps > 1) will leak smp->nsnm;
 
 		return false;
 	}
@@ -3217,7 +3321,9 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files,
 
 			if (sp->type == TYPE_SEC_STAGE && sp->nsid == nsid
 					&& sp->inst == inst) {
-				ssps[n_ssps++] = *sp;
+				ssps[n_ssps] = *sp;
+				ssps[n_ssps].nsnm = strdup(nsnm);
+				n_ssps++;
 			}
 		}
 
@@ -3226,6 +3332,14 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files,
 				printf("No secondary stage segment files for instance %u"
 						", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 			}
+
+			free(ptp->nsnm);
+
+			for (uint32_t jx= 0; jx < n_psps; jx++) {
+				free(psps[jx].nsnm);
+			}
+
+			free(smp->nsnm);
 
 			return false;
 		}
@@ -3257,6 +3371,19 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files,
 									", namespace \'%s\' (nsid %d).\n",
 							ix + (uint32_t)AS_XMEM_ARENA_KEY, inst, nsnm, nsid);
 				}
+
+				free(ptp->nsnm);
+
+				for (uint32_t jx= 0; jx < n_psps; jx++) {
+					free(psps[jx].nsnm);
+				}
+
+				free(smp->nsnm);
+
+				for (uint32_t jx = 0; jx < n_ssps; jx++) {
+					free(ssps[jx].nsnm);
+				}
+
 				return false;
 			}
 		}
@@ -3277,6 +3404,18 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files,
 			printf("Failed restore sanity check for instance %u"
 					", namespace \'%s\' (nsid %d).\n", files[base_ix].inst,
 					files[base_ix].nsnm, files[base_ix].nsid);
+		}
+
+		free(ptp->nsnm);
+
+		for (uint32_t ix = 0; ix < n_psps; ix++) {
+			free(psps[ix].nsnm);
+		}
+
+		free(smp->nsnm);
+
+		for (uint32_t ix = 0; ix < n_ssps; ix++) {
+			free(ssps[ix].nsnm);
 		}
 
 		return false;
@@ -3300,16 +3439,43 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files,
 			printf("\n");
 		}
 
+		free(ptp->nsnm);
+
+		for (uint32_t ix = 0; ix < n_psps; ix++) {
+			free(psps[ix].nsnm);
+		}
+
+		free(smp->nsnm);
+
+		for (uint32_t ix = 0; ix < n_ssps; ix++) {
+			free(ssps[ix].nsnm);
+		}
+
 		return true;
 	}
 	else {
 		// Actually perform restores...
 
-		return restore_candidate(pbp, ptp, psps, n_psps, smp, ssps, n_ssps);
+		bool success = restore_candidate(pbp, ptp, psps, n_psps, smp, ssps,
+				n_ssps);
+
+		free(ptp->nsnm);
+
+		for (uint32_t ix = 0; ix < n_psps; ix++) {
+			free(psps[ix].nsnm);
+		}
+
+		free(smp->nsnm);
+
+		for (uint32_t ix = 0; ix < n_ssps; ix++) {
+			free(ssps[ix].nsnm);
+		}
+
+		return success;
 	}
 }
 
-// Display a list of segment files to ba restored.
+// Display a list of segment files to be restored.
 
 static void
 display_files(as_file_t* pbp, as_file_t* ptp, as_file_t psps[], uint32_t n_psps,
@@ -3378,6 +3544,7 @@ display_files(as_file_t* pbp, as_file_t* ptp, as_file_t psps[], uint32_t n_psps,
 		else {
 			sprintf(buffer, "%s", gr->gr_name);
 		}
+
 		table[i][2] = strdup(buffer);
 
 		sprintf(buffer, "0%o", file->mode);
@@ -3395,12 +3562,7 @@ display_files(as_file_t* pbp, as_file_t* ptp, as_file_t psps[], uint32_t n_psps,
 		sprintf(buffer, "%u", file->nsid);
 		table[i][7] = strdup(buffer);
 
-		if (file->type == TYPE_BASE) {
-			sprintf(buffer, "%s", file->nsnm == NULL ? "<null>" : file->nsnm);
-		}
-		else {
-			sprintf(buffer, "-");
-		}
+		sprintf(buffer, "%s", file->nsnm == NULL ? "-" : file->nsnm);
 		table[i][8] = strdup(buffer);
 
 		switch (file->type) {
@@ -3422,6 +3584,7 @@ display_files(as_file_t* pbp, as_file_t* ptp, as_file_t psps[], uint32_t n_psps,
 		default:
 			assert(false);
 		}
+
 		table[i][9] = strdup(buffer);
 
 		if (file->type == TYPE_PRI_STAGE || file->type == TYPE_SEC_STAGE) {
@@ -3430,6 +3593,7 @@ display_files(as_file_t* pbp, as_file_t* ptp, as_file_t psps[], uint32_t n_psps,
 		else {
 			sprintf(buffer, "-");
 		}
+
 		table[i][10] = strdup(buffer);
 	}
 
@@ -3923,10 +4087,6 @@ restore_candidate_cleanup(as_io_t ios[], uint32_t n_ios, bool remove_segments)
 		close(io->fd);
 	}
 
-	if (!remove_segments) {
-		return;
-	}
-
 	// Detach all attached segments.
 
 	for (uint32_t i = 0; i <= n_ios; i++) {
@@ -3935,6 +4095,10 @@ restore_candidate_cleanup(as_io_t ios[], uint32_t n_ios, bool remove_segments)
 		// Detach this segment.
 
 		shmdt(io->memptr);
+	}
+
+	if (!remove_segments) {
+		return;
 	}
 
 	// Destroy all created segments in case of failure.
@@ -4052,7 +4216,7 @@ validate_file_name(const char* pathname, as_file_t* file)
 			>> AS_XMEM_NS_KEY_SHIFT;
 
 	if (file->nsid < MIN_NSID || file->nsid > MAX_NSID) {
-		// Invalid instance.
+		// Invalid nsid.
 		free(old_ptr);
 		return false;
 	}
@@ -4356,6 +4520,7 @@ draw_table(char** table, uint32_t n_rows, uint32_t n_cols)
 		printf("%s", field);
 		free(field);
 	}
+
 	printf("\n");
 
 	for (uint32_t j = 0; j < n_cols; j++) {
@@ -4365,6 +4530,7 @@ draw_table(char** table, uint32_t n_rows, uint32_t n_cols)
 		printf("%s", field);
 		free(field);
 	}
+
 	printf("\n");
 
 	// Print table body.
@@ -4377,6 +4543,7 @@ draw_table(char** table, uint32_t n_rows, uint32_t n_cols)
 			printf("%s", field);
 			free(field);
 		}
+
 		printf("\n");
 	}
 
@@ -4503,6 +4670,7 @@ strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile)
 	else {
 		sprintf(outptr, "(ETA: %ld.%lds)", seconds, tenths);
 	}
+
 	retptr = strdup(outbuff);
 
 	return retptr;
