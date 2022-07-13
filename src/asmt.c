@@ -3615,7 +3615,7 @@ analyze_restore_sanity(as_file_t* pbp, as_file_t* ptp, as_file_t psps[],
 
 			if (nsid == pbp->nsid && inst == pbp->inst) {
 				if (g_verbose) {
-					printf("Found existing shared memory segment %08x with"
+					printf("Found existing Aerospike segment %08x with"
 							" instance %u, namespace \'%s\' (nsid %u)"
 							": cannot restore associated file.\n",
 							ds.shm_perm.__key, inst, pbp->nsnm, nsid);
@@ -3646,7 +3646,7 @@ analyze_restore_sanity(as_file_t* pbp, as_file_t* ptp, as_file_t psps[],
 			// Check whether instance and namespace match.
 
 			if (g_verbose) {
-				printf("Found existing shared memory segment %08x with"
+				printf("Found existing Aerospike segment %08x with"
 						" instance %u, namespace \'%s\' (nsid %u)"
 						": cannot restore associated file.\n",
 						ds.shm_perm.__key, inst, pbp->nsnm, nsid);
