@@ -563,7 +563,7 @@ main(int argc, char* argv[])
 	if (g_verbose) {
 		printf("%s, %s", g_fullname, g_version);
 		printf("\n");
-		printf("%s %s\n", g_copyright, g_all_rights);
+		printf("%s  %s\n", g_copyright, g_all_rights);
 		printf("\n");
 	}
 
@@ -674,7 +674,7 @@ usage(bool verbose)
 {
 	printf("%s, %s", g_fullname, g_version);
 	printf("\n");
-	printf("%s %s\n", g_copyright, g_all_rights);
+	printf("%s  %s\n", g_copyright, g_all_rights);
 	printf("\n");
 
 	char first_str[MAX_BUFFER];
@@ -3444,7 +3444,9 @@ analyze_restore_sanity(as_file_t* pbp, as_file_t* ptp, as_file_t psps[],
 {
 	(void)ptp;
 	(void)psps;
+	(void)smp;
 	(void)ssps;
+	(void)n_ssps;
 
 	// Check that the number of stages is valid.
 
@@ -3575,6 +3577,7 @@ analyze_restore_sanity(as_file_t* pbp, as_file_t* ptp, as_file_t psps[],
 	// Try each shmid in the range. Some may correspond to segments.
 
 	bool found = false;
+
 	for (int i = 0; i <= max_shmid; i++) {
 		// Get information about segment.
 
@@ -3588,40 +3591,68 @@ analyze_restore_sanity(as_file_t* pbp, as_file_t* ptp, as_file_t psps[],
 
 		key_t key = ds.shm_perm.__key;
 
-		// Check if this is an Aerospike key.
+		// Check if this is an Aerospike primary segment key.
 
-		if ((key & AS_XMEM_PRI_KEY) != AS_XMEM_PRI_KEY) {
-			continue;
+		if ((key & AS_XMEM_PRI_KEY) == AS_XMEM_PRI_KEY) {
+
+			// Found a valid Aerospike database primary segment.
+			// Extract the base from the key.
+
+			key = key & ~AS_XMEM_PRI_KEY;
+
+			// Determine instance from key base.
+
+			uint32_t inst = (uint32_t) key >> AS_XMEM_INSTANCE_KEY_SHIFT;
+
+			// Determine namespace ID from key base.
+
+			key = key & ~(0xf << AS_XMEM_INSTANCE_KEY_SHIFT);
+
+			uint32_t nsid = (uint32_t) (key & (0xff << AS_XMEM_NS_KEY_SHIFT))
+					>> AS_XMEM_NS_KEY_SHIFT;
+
+			// Check whether instance and namespace match.
+
+			if (nsid == pbp->nsid && inst == pbp->inst) {
+				if (g_verbose) {
+					printf("Found existing shared memory segment %08x with"
+							" instance %u, namespace \'%s\' (nsid %u)"
+							": cannot restore associated file.\n",
+							ds.shm_perm.__key, inst, pbp->nsnm, nsid);
+				}
+
+				found = true;
+			}
 		}
 
-		// Found a valid Aerospike database segment; create segment entry.
-		// Extract the base from the key.
+		if ((key & AS_XMEM_SEC_KEY) == AS_XMEM_SEC_KEY) {
 
-		key = key & ~AS_XMEM_PRI_KEY;
+			// Found a valid Aerospike database secondary segment.
+			// Extract the base from the key.
 
-		// Determine instance from key base.
+			key = key & ~AS_XMEM_SEC_KEY;
 
-		uint32_t inst = (uint32_t)key >> AS_XMEM_INSTANCE_KEY_SHIFT;
+			// Determine instance from key base.
 
-		// Determine namespace ID from key base.
+			uint32_t inst = (uint32_t) key >> AS_XMEM_INSTANCE_KEY_SHIFT;
 
-		key = key & ~(0xf << AS_XMEM_INSTANCE_KEY_SHIFT);
+			// Determine namespace ID from key base.
 
-		uint32_t nsid = (uint32_t)(key & (0xff << AS_XMEM_NS_KEY_SHIFT))
-				>> AS_XMEM_NS_KEY_SHIFT;
+			key = key & ~(0xf << AS_XMEM_INSTANCE_KEY_SHIFT);
 
-		// Check whether instance and namespace match.
+			uint32_t nsid = (uint32_t) (key & (0xff << AS_XMEM_NS_KEY_SHIFT))
+					>> AS_XMEM_NS_KEY_SHIFT;
 
-		if (nsid == pbp->nsid && inst == pbp->inst) {
+			// Check whether instance and namespace match.
+
 			if (g_verbose) {
 				printf("Found existing shared memory segment %08x with"
 						" instance %u, namespace \'%s\' (nsid %u)"
-						": cannot restore segment.\n", ds.shm_perm.__key, inst,
-						pbp->nsnm, nsid);
+						": cannot restore associated file.\n",
+						ds.shm_perm.__key, inst, pbp->nsnm, nsid);
 			}
 
 			found = true;
-			continue;
 		}
 	}
 
@@ -3732,6 +3763,14 @@ restore_candidate_segment(as_file_t *file, as_io_t *io, as_io_t ios[],
 		uint32_t n_ios, as_file_t *pbp, as_file_t *ptp, as_file_t psps[],
 		uint32_t n_psps, as_file_t *smp, as_file_t ssps[], uint32_t n_ssps)
 {
+	(void)pbp;
+	(void)ptp;
+	(void)psps;
+	(void)n_psps;
+	(void)smp;
+	(void)ssps;
+	(void)n_ssps;
+
 	// Try to create the segment.
 
 	int shmid = shmget(file->key, file->segsz, SHMGET_FLAGS_CREATE_ONLY);
