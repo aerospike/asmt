@@ -128,7 +128,7 @@ typedef struct as_cmp_s {
 // Constant globals.
 
 static const char g_fullname[] = "Aerospike Shared Memory Tool";
-static const char g_version[] = "Version 0.9.4-alpha";
+static const char g_version[] = "Version 0.9.4";
 static const char g_copyright[] = "Copyright (C) 2022 Aerospike, Inc.";
 static const char g_all_rights[] = "All rights reserved.";
 
@@ -602,14 +602,14 @@ main(int argc, char* argv[])
 			else if (g_compress && g_crc32) {
 				printf(" with compression and crc32 checking");
 			}
-			printf(".\n\n");
+			printf(".\n");
 		}
 		else {
 			printf("Performing restore operation");
 			if (g_crc32) {
 				printf(" with crc32 checking");
 			}
-			printf(".\n\n");
+			printf(".\n");
 		}
 	}
 
@@ -929,16 +929,19 @@ analyze_backup(void)
 
 		if (g_verbose) {
 			printf("\nDid not find any suitable Aerospike database segments");
-			printf("for instance %u", g_inst);
+			printf(", instance %u", g_inst);
+
 			if (g_nsnm != NULL) {
 				printf(", namespace \'%s\'", g_nsnm);
 			}
+
 			if (error != 0) {
 				char errbuff[MAX_BUFFER];
 				char *errout = strerror_r(errno, errbuff, MAX_BUFFER);
 
 				printf(": error was %d: %s", error, errout);
 			}
+
 			printf(".\n");
 		}
 
@@ -962,10 +965,12 @@ analyze_backup(void)
 			if (!analyze_backup_candidate(segments, n_segments, i)) {
 				for (uint32_t j = 0; j < n_segments; j++) {
 					as_segment_t* sp = &segments[j];
+
 					if (sp->nsnm != NULL) {
 						free(sp->nsnm);
 					}
 				}
+
 				free(segments);
 
 				return false;
@@ -977,15 +982,18 @@ analyze_backup(void)
 		if (g_verbose) {
 			printf("\nDid not find any unattached Aerospike database segments");
 			printf(", instance %u", g_inst);
+
 			if (g_nsnm != NULL) {
 				printf(", namespace \'%s\'", g_nsnm);
 			}
+
 			printf(".\n");
 		}
 	}
 
 	for (uint32_t j = 0; j < n_segments; j++) {
 		as_segment_t* sp = &segments[j];
+
 		if (sp->nsnm != NULL) {
 			free(sp->nsnm);
 		}
@@ -1081,18 +1089,18 @@ list_segments(as_segment_t** segments, uint32_t* n_segments, int* error)
 		return false;
 	}
 
-	int max_shmid = rc; // Range of shmids: 0..max_shmid (inclusive).
+	int max_shmid = rc; // Range of shmids: (0..max_shmid) (inclusive).
 
 	*segments = NULL; // Table is initially empty.
 
 	// Try each shmid in the range. Some may correspond to segments.
 
-	for (int i = 0; i <= max_shmid; i++) {
+	for (int ix = 0; ix <= max_shmid; ix++) {
 		as_segment_t* segment;
 
 		// Get information about segment.
 
-		if (!stat_segment(i, &segment, error)) {
+		if (!stat_segment(ix, &segment, error)) {
 			continue;
 		}
 
@@ -1102,6 +1110,7 @@ list_segments(as_segment_t** segments, uint32_t* n_segments, int* error)
 			if (segment->nsnm != NULL) {
 				free(segment->nsnm);
 			}
+
 			free(segment);
 			continue;
 		}
@@ -1112,6 +1121,7 @@ list_segments(as_segment_t** segments, uint32_t* n_segments, int* error)
 			if (segment->nsnm != NULL) {
 				free(segment->nsnm);
 			}
+
 			free(segment);
 			continue;
 		}
@@ -1293,9 +1303,11 @@ stat_segment(int shmid, as_segment_t** segment, int* error)
 
 		if (memptr == (void*)-1) {
 			*error = errno;
+
 			if (sp->nsnm != NULL) {
 				free(sp->nsnm);
 			}
+
 			free(*segment);
 			return false;
 		}
@@ -1575,8 +1587,8 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 			// Print command to backup these segments.
 
 			printf("%s -b", g_progname);
-			printf(" -i %u", segments[base_ix].inst);
-			printf(" -n %s", segments[base_ix].nsnm);
+			printf(" -i %u", inst);
+			printf(" -n %s", nsnm);
 			printf(" -p %s", g_pathdir);
 			if (g_compress) {
 				printf(" -z");
@@ -2116,7 +2128,6 @@ backup_candidate_file(as_segment_t* sp, as_io_t* io, as_io_t ios[],
 
 	if (!io->compress) {
 		// Allocate storage space for the data to be written to the file.
-		// Note: We reserve full space even for compressed files.
 
 		rc = posix_fallocate(io->fd, 0, (off_t)sp->segsz);
 
@@ -2192,13 +2203,13 @@ backup_candidate_cleanup(as_io_t ios[], as_segment_t* pbp,
 
 	// Detach all (possibly) attached segments.
 
-	for (uint32_t ix = 0; ix <= n_objects; ix++) {
+	for (uint32_t ix = 0; ix < n_objects; ix++) {
 		shmdt(ios[ix].memptr);
 	}
 
 	// Close all (possibly) opened files.
 
-	for (uint32_t ix = 0; ix <= n_objects; ix++) {
+	for (uint32_t ix = 0; ix < n_objects; ix++) {
 		close(ios[ix].fd);
 	}
 
@@ -2222,7 +2233,7 @@ backup_candidate_cleanup(as_io_t ios[], as_segment_t* pbp,
 	sprintf(pathname, "%s/%08x%s", g_pathdir, sp->key, extension);
 	unlink(pathname);
 
-	for (uint32_t ix = 0; ix <= n_psps; ix++) {
+	for (uint32_t ix = 0; ix < n_psps; ix++) {
 		sp = &psps[ix];
 
 		extension = g_compress ? FILE_EXTENSION_CMP : FILE_EXTENSION;
@@ -2236,7 +2247,7 @@ backup_candidate_cleanup(as_io_t ios[], as_segment_t* pbp,
 		sprintf(pathname, "%s/%08x%s", g_pathdir, sp->key, extension);
 		unlink(pathname);
 
-		for (uint32_t ix = 0; ix <= n_ssps; ix++) {
+		for (uint32_t ix = 0; ix < n_ssps; ix++) {
 			sp = &ssps[ix];
 
 			extension = g_compress ? FILE_EXTENSION_CMP : FILE_EXTENSION;
@@ -2306,6 +2317,7 @@ start_io(as_io_t ios[], uint32_t n_ios)
 			pthread_mutex_lock(&g_io_mutex);
 			g_ios_ok = false;
 			pthread_mutex_unlock(&g_io_mutex);
+
 			break;
 		}
 	}
@@ -3621,6 +3633,7 @@ analyze_restore_sanity(as_file_t* pbp, as_file_t* ptp, as_file_t psps[],
 	// Extract arena stage count name from file.
 
 	int rc = open(pathname, O_RDONLY);
+
 	if (rc < 0) {
 		if (g_verbose) {
 			printf("Could not extract number of arena stages from base segment"
@@ -3790,7 +3803,6 @@ analyze_restore_sanity(as_file_t* pbp, as_file_t* ptp, as_file_t psps[],
 		}
 
 		if ((key & AS_XMEM_SEC_KEY) == AS_XMEM_SEC_KEY) {
-
 			// Found a valid Aerospike database secondary segment.
 			// Extract the base from the key.
 
@@ -4079,7 +4091,7 @@ restore_candidate_cleanup(as_io_t ios[], uint32_t n_ios, bool remove_segments)
 {
 	// Close all opened files.
 
-	for (uint32_t i = 0; i <= n_ios; i++) {
+	for (uint32_t i = 0; i < n_ios; i++) {
 		as_io_t *io = &ios[i];
 
 		// Close the file.
@@ -4089,7 +4101,7 @@ restore_candidate_cleanup(as_io_t ios[], uint32_t n_ios, bool remove_segments)
 
 	// Detach all attached segments.
 
-	for (uint32_t i = 0; i <= n_ios; i++) {
+	for (uint32_t i = 0; i < n_ios; i++) {
 		as_io_t *io = &ios[i];
 
 		// Detach this segment.
@@ -4103,7 +4115,7 @@ restore_candidate_cleanup(as_io_t ios[], uint32_t n_ios, bool remove_segments)
 
 	// Destroy all created segments in case of failure.
 
-	for (uint32_t i = 0; i <= n_ios; i++) {
+	for (uint32_t i = 0; i < n_ios; i++) {
 		as_io_t *io = &ios[i];
 		struct shmid_ds ds; // Dummy.
 
@@ -4317,7 +4329,7 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 				char *errout = strerror_r(errno, errbuff, MAX_BUFFER);
 
 				printf("Did not find info for Aerospike database file"
-						" file \'%s\': error was %d: %s.\n", pathname, errno,
+						" \'%s\': error was %d: %s.\n", pathname, errno,
 						errout);
 			}
 
@@ -4590,6 +4602,8 @@ strfmt_width(char* string, uint32_t width, uint32_t n_blanks, bool dashes)
 static char*
 strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile)
 {
+	(void)decile;
+
 	char outbuff[256];
 	char* outptr = outbuff;
 	char* retptr = NULL;
@@ -4636,41 +4650,43 @@ strtime_diff_eta(struct timespec* start, struct timespec* end, uint32_t decile)
 		outptr += sprintf(outptr, "%ld.%lds", seconds, tenths);
 	}
 
-	if (decile < 1 || decile >= 10) {
-		retptr = strdup(outbuff);
-		return retptr;
-	}
+	// TODO: Fix the ETA. It's hopelessly broken now.
 
-	// Add the ETA.
-
-	*outptr++ = ' ';
-	*outptr = '\0';
-
-	// Compute ETA, given diff and decile.
-
-	struct timespec eta = diff;
-
-	eta.tv_sec = (time_t)(10.0 / (double)decile * (double)diff.tv_sec);
-	eta.tv_nsec = (time_t)(10.0 / (double)decile * (double)diff.tv_nsec);
-	gettime_hmst(&eta, &hours, &minutes, &seconds, &tenths);
-
-	if (hours < 0 || minutes < 0 || seconds < 0 || tenths < 0) {
-		sprintf(outptr, "<null>");
-		retptr = strdup(outbuff);
-		return retptr;
-	}
-
-	if (hours != 0) {
-		sprintf(outptr, "(ETA: %ldh:%ldm:%ld.%lds)", hours, minutes, seconds,
-				tenths);
-	}
-	else if (minutes != 0) {
-		sprintf(outptr, "(ETA: %ldm:%ld.%lds)", minutes, seconds, tenths);
-	}
-	else {
-		sprintf(outptr, "(ETA: %ld.%lds)", seconds, tenths);
-	}
-
+//	if (decile < 1 || decile >= 10) {
+//		retptr = strdup(outbuff);
+//		return retptr;
+//	}
+//
+//	// Add the ETA.
+//
+//	*outptr++ = ' ';
+//	*outptr = '\0';
+//
+//	// Compute ETA, given diff and decile.
+//
+//	struct timespec eta = diff;
+//
+//	eta.tv_sec = (time_t)(10.0 / (double)decile * (double)diff.tv_sec);
+//	eta.tv_nsec = (time_t)(10.0 / (double)decile * (double)diff.tv_nsec);
+//	gettime_hmst(&eta, &hours, &minutes, &seconds, &tenths);
+//
+//	if (hours < 0 || minutes < 0 || seconds < 0 || tenths < 0) {
+//		sprintf(outptr, "<null>");
+//		retptr = strdup(outbuff);
+//		return retptr;
+//	}
+//
+//	if (hours != 0) {
+//		sprintf(outptr, "(ETA: %ldh:%ldm:%ld.%lds)", hours, minutes, seconds,
+//				tenths);
+//	}
+//	else if (minutes != 0) {
+//		sprintf(outptr, "(ETA: %ldm:%ld.%lds)", minutes, seconds, tenths);
+//	}
+//	else {
+//		sprintf(outptr, "(ETA: %ld.%lds)", seconds, tenths);
+//	}
+//
 	retptr = strdup(outbuff);
 
 	return retptr;
