@@ -1391,7 +1391,7 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 					", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 		}
 
-		if (ptp->nsnm != NULL) {
+		if (ptp != NULL && ptp->nsnm != NULL) {
 			free(ptp->nsnm);
 		}
 
@@ -1426,7 +1426,7 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 						ix + (uint32_t)AS_XMEM_ARENA_KEY, inst, nsnm, nsid);
 			}
 
-			if (ptp->nsnm != NULL) {
+			if (ptp != NULL && ptp->nsnm != NULL) {
 				free(ptp->nsnm);
 			}
 
@@ -1461,7 +1461,7 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 					", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 		}
 
-		if (ptp->nsnm != NULL) {
+		if (ptp != NULL && ptp->nsnm != NULL) {
 			free(ptp->nsnm);
 		}
 
@@ -1503,7 +1503,7 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 						", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 			}
 
-			if (ptp->nsnm != NULL) {
+			if (ptp != NULL && ptp->nsnm != NULL) {
 				free(ptp->nsnm);
 			}
 
@@ -1514,7 +1514,7 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 			}
 
 			if (n_ssps > 0) {
-				if (smp->nsnm != NULL) {
+				if (smp != NULL && smp->nsnm != NULL) {
 					free(smp->nsnm);
 				}
 			}
@@ -1551,7 +1551,7 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 							nsid);
 				}
 
-				if (ptp->nsnm != NULL) {
+				if (ptp != NULL && ptp->nsnm != NULL) {
 					free(ptp->nsnm);
 				}
 
@@ -1561,7 +1561,7 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 					}
 				}
 
-				if (smp->nsnm != NULL) {
+				if (smp != NULL && smp->nsnm != NULL) {
 					free(smp->nsnm);
 				}
 
@@ -1592,7 +1592,7 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 					", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 		}
 
-		if (ptp->nsnm != NULL) {
+		if (ptp != NULL && ptp->nsnm != NULL) {
 			free(ptp->nsnm);
 		}
 
@@ -1602,7 +1602,7 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 			}
 		}
 
-		if (smp->nsnm != NULL) {
+		if (smp != NULL && smp->nsnm != NULL) {
 			free(smp->nsnm);
 		}
 
@@ -1644,7 +1644,7 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 			}
 		}
 
-		if (smp->nsnm != NULL) {
+		if (smp != NULL && smp->nsnm != NULL) {
 			free(smp->nsnm);
 		}
 
@@ -1661,7 +1661,7 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 
 	bool success =  backup_candidate(pbp, ptp, psps, n_psps, smp, ssps, n_ssps);\
 
-	if (ptp->nsnm != NULL) {
+	if (ptp != NULL && ptp->nsnm != NULL) {
 		free(ptp->nsnm);
 	}
 
@@ -1672,7 +1672,7 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 	}
 
 	if (n_ssps > 0) {
-		if (smp->nsnm != NULL) {
+		if (smp != NULL && smp->nsnm != NULL) {
 			free(smp->nsnm);
 		}
 
@@ -3297,7 +3297,7 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 					", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 		}
 
-		if (ptp->nsnm != NULL) {
+		if (ptp != NULL && ptp->nsnm != NULL) {
 			free(ptp->nsnm);
 		}
 
@@ -3332,7 +3332,7 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 						ix + (uint32_t)AS_XMEM_ARENA_KEY, inst, nsnm, nsid);
 			}
 
-			if (ptp->nsnm != NULL) {
+			if (ptp != NULL && ptp->nsnm != NULL) {
 				free(ptp->nsnm);
 			}
 
@@ -3367,7 +3367,7 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 					", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 		}
 
-		if (ptp->nsnm != NULL) {
+		if (ptp != NULL && ptp->nsnm != NULL) {
 			free(ptp->nsnm);
 		}
 
@@ -3408,7 +3408,7 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 						", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 			}
 
-			if (ptp->nsnm != NULL) {
+			if (ptp != NULL && ptp->nsnm != NULL) {
 				free(ptp->nsnm);
 			}
 
@@ -3418,7 +3418,7 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 				}
 			}
 
-			if (smp->nsnm != NULL) {
+			if (smp != NULL && smp->nsnm != NULL) {
 				free(smp->nsnm);
 			}
 
@@ -3453,7 +3453,7 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 							ix + (uint32_t)AS_XMEM_ARENA_KEY, inst, nsnm, nsid);
 				}
 
-				if (ptp->nsnm != NULL) {
+				if (ptp != NULL && ptp->nsnm != NULL) {
 					free(ptp->nsnm);
 				}
 
@@ -3463,7 +3463,7 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 					}
 				}
 
-				if (smp->nsnm != NULL) {
+				if (smp != NULL && smp->nsnm != NULL) {
 					free(smp->nsnm);
 				}
 
@@ -3495,7 +3495,7 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 					files[base_ix].nsnm, files[base_ix].nsid);
 		}
 
-		if (ptp->nsnm != NULL) {
+		if (ptp != NULL && ptp->nsnm != NULL) {
 			free(ptp->nsnm);
 		}
 
@@ -3505,7 +3505,7 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 			}
 		}
 
-		if (smp->nsnm != NULL) {
+		if (smp != NULL && smp->nsnm != NULL) {
 			free(smp->nsnm);
 		}
 
@@ -3536,7 +3536,7 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 			printf("\n");
 		}
 
-		if (ptp->nsnm != NULL) {
+		if (ptp != NULL && ptp->nsnm != NULL) {
 			free(ptp->nsnm);
 		}
 
@@ -3546,7 +3546,7 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 			}
 		}
 
-		if (smp->nsnm != NULL) {
+		if (smp != NULL && smp->nsnm != NULL) {
 			free(smp->nsnm);
 		}
 
@@ -3564,7 +3564,7 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 		bool success = restore_candidate(pbp, ptp, psps, n_psps, smp, ssps,
 				n_ssps);
 
-		if (ptp->nsnm != NULL) {
+		if (ptp != NULL && ptp->nsnm != NULL) {
 			free(ptp->nsnm);
 		}
 
@@ -3574,7 +3574,7 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 			}
 		}
 
-		if (smp->nsnm != NULL) {
+		if (smp != NULL && smp->nsnm != NULL) {
 			free(smp->nsnm);
 		}
 
