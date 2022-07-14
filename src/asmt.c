@@ -135,6 +135,7 @@ static const char g_all_rights[] = "All rights reserved.";
 static const char* FILE_EXTENSION = ".dat";
 static const char* FILE_EXTENSION_CMP = ".dat.gz";
 
+static const key_t AS_XMEM_KEY_TYPE_MASK = (key_t)0xFF000000;
 static const key_t AS_XMEM_PRI_KEY = (key_t)0xAE000000;
 static const key_t AS_XMEM_SEC_KEY = (key_t)0xA2000000;
 static const key_t AS_XMEM_TREEX_KEY = (key_t)0x00000001;
@@ -1183,10 +1184,10 @@ stat_segment(int shmid, as_segment_t** segment, int* error)
 	bool primary = false;
 	bool secondary = false;
 
-	if ((key & AS_XMEM_PRI_KEY) == AS_XMEM_PRI_KEY) {
+	if ((key & AS_XMEM_KEY_TYPE_MASK) == AS_XMEM_PRI_KEY) {
 		primary = true;
 	}
-	else if ((key & AS_XMEM_SEC_KEY) == AS_XMEM_SEC_KEY) {
+	else if ((key & AS_XMEM_KEY_TYPE_MASK) == AS_XMEM_SEC_KEY) {
 		secondary = true;
 	}
 
@@ -1214,7 +1215,7 @@ stat_segment(int shmid, as_segment_t** segment, int* error)
 
 	// Extract the key base from the key.
 
-	key = key & ~AS_XMEM_PRI_KEY;
+	key = key & ~AS_XMEM_KEY_TYPE_MASK;
 
 	// Determine instance from key base.
 
@@ -4298,11 +4299,11 @@ validate_file_name(const char* pathname, as_file_t* file)
 	bool primary = false;
 	bool secondary = false;
 
-	if ((key & AS_XMEM_PRI_KEY) == AS_XMEM_PRI_KEY) {
+	if ((key & AS_XMEM_KEY_TYPE_MASK) == AS_XMEM_PRI_KEY) {
 		primary = true;
 		key = key & ~AS_XMEM_PRI_KEY;
 	}
-	else if ((key & AS_XMEM_SEC_KEY) == AS_XMEM_SEC_KEY) {
+	else if ((key & AS_XMEM_KEY_TYPE_MASK) == AS_XMEM_SEC_KEY) {
 		secondary = true;
 		key = key & ~AS_XMEM_SEC_KEY;
 	}
