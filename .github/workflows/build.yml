@@ -18,12 +18,14 @@ jobs:
     steps:
     - name: Install Dependencies (centos:7)
       run: |
+        yum upgrade -y
         yum install -y dnf-plugins-core
         yum-config-manager --enable powertools
         yum install -y make gcc zlib-devel zlib-static git rpm-build
       if: matrix.container == 'centos:7'
     - name: Install Dependencies (centos:8)
       run: |
+        yum upgrade -y
         yum install -y dnf-plugins-core
         yum config-manager --set-enable powertools
         yum install -y make gcc zlib-devel zlib-static git rpm-build
