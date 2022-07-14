@@ -1,0 +1,13 @@
+#!/bin/sh
+
+set -e
+
+case "$1" in
+  remove)
+  
+  echo Removing /opt/aerospike/bin/asmt 
+  rm -f /opt/aerospike/bin/asmt
+  ;;
+esac
+
+exit 0

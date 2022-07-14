@@ -2,7 +2,6 @@
 .project
 .settings
 target
-
 # emacs backup / temp files
 *~
 \#*\#
