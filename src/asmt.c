@@ -1390,7 +1390,9 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 					", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 		}
 
-		free(ptp->nsnm);
+		if (ptp->nsnm != NULL) {
+			free(ptp->nsnm);
+		}
 
 		return false;
 	}
@@ -1423,10 +1425,14 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 						ix + (uint32_t)AS_XMEM_ARENA_KEY, inst, nsnm, nsid);
 			}
 
-			free(ptp->nsnm);
+			if (ptp->nsnm != NULL) {
+				free(ptp->nsnm);
+			}
 
 			for (uint32_t jx = 0; jx < n_psps; jx++) {
-				free(psps[jx].nsnm);
+				if (psps[jx].nsnm != NULL) {
+					free(psps[jx].nsnm);
+				}
 			}
 
 			return false;
@@ -1454,10 +1460,14 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 					", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 		}
 
-		free(ptp->nsnm);
+		if (ptp->nsnm != NULL) {
+			free(ptp->nsnm);
+		}
 
 		for (uint32_t jx= 0; jx < n_psps; jx++) {
-			free(psps[jx].nsnm);
+			if (psps[jx].nsnm != NULL) {
+				free(psps[jx].nsnm);
+			}
 		}
 
 		// TODO: If (n_smps > 1) will leak smp->nsnm.
@@ -1492,13 +1502,21 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 						", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 			}
 
-			free(ptp->nsnm);
-
-			for (uint32_t jx= 0; jx < n_psps; jx++) {
-				free(psps[jx].nsnm);
+			if (ptp->nsnm != NULL) {
+				free(ptp->nsnm);
 			}
 
-			free(smp->nsnm);
+			for (uint32_t jx= 0; jx < n_psps; jx++) {
+				if (psps[jx].nsnm != NULL) {
+					free(psps[jx].nsnm);
+				}
+			}
+
+			if (n_ssps > 0) {
+				if (smp->nsnm != NULL) {
+					free(smp->nsnm);
+				}
+			}
 
 			return false;
 		}
@@ -1532,16 +1550,24 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 							nsid);
 				}
 
-				free(ptp->nsnm);
-
-				for (uint32_t jx= 0; jx < n_psps; jx++) {
-					free(psps[jx].nsnm);
+				if (ptp->nsnm != NULL) {
+					free(ptp->nsnm);
 				}
 
-				free(smp->nsnm);
+				for (uint32_t jx= 0; jx < n_psps; jx++) {
+					if (psps[jx].nsnm != NULL) {
+						free(psps[jx].nsnm);
+					}
+				}
+
+				if (smp->nsnm != NULL) {
+					free(smp->nsnm);
+				}
 
 				for (uint32_t jx= 0; jx < n_ssps; jx++) {
-					free(ssps[jx].nsnm);
+					if (ssps[jx].nsnm != NULL) {
+						free(ssps[jx].nsnm);
+					}
 				}
 
 				return false;
@@ -1565,16 +1591,24 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 					", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 		}
 
-		free(ptp->nsnm);
-
-		for (uint32_t jx= 0; jx < n_psps; jx++) {
-			free(psps[jx].nsnm);
+		if (ptp->nsnm != NULL) {
+			free(ptp->nsnm);
 		}
 
-		free(smp->nsnm);
+		for (uint32_t jx= 0; jx < n_psps; jx++) {\
+			if (psps[jx].nsnm != NULL) {
+				free(psps[jx].nsnm);
+			}
+		}
+
+		if (smp->nsnm != NULL) {
+			free(smp->nsnm);
+		}
 
 		for (uint32_t jx= 0; jx < n_ssps; jx++) {
-			free(ssps[jx].nsnm);
+			if (ssps[jx].nsnm != NULL) {
+				free(ssps[jx].nsnm);
+			}
 		}
 
 		return false;
@@ -1599,16 +1633,24 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 			printf("\n");
 		}
 
-		free(ptp->nsnm);
-
-		for (uint32_t jx= 0; jx < n_psps; jx++) {
-			free(psps[jx].nsnm);
+		if (ptp->nsnm != NULL) {
+			free(ptp->nsnm);
 		}
 
-		free(smp->nsnm);
+		for (uint32_t jx= 0; jx < n_psps; jx++) {
+			if (psps[jx].nsnm != NULL) {
+				free(psps[jx].nsnm);
+			}
+		}
+
+		if (smp->nsnm != NULL) {
+			free(smp->nsnm);
+		}
 
 		for (uint32_t jx= 0; jx < n_ssps; jx++) {
-			free(ssps[jx].nsnm);
+			if (ssps[jx].nsnm != NULL) {
+				free(ssps[jx].nsnm);
+			}
 		}
 
 		return true;
@@ -1618,16 +1660,26 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 
 	bool success =  backup_candidate(pbp, ptp, psps, n_psps, smp, ssps, n_ssps);\
 
-	free(ptp->nsnm);
-
-	for (uint32_t jx= 0; jx < n_psps; jx++) {
-		free(psps[jx].nsnm);
+	if (ptp->nsnm != NULL) {
+		free(ptp->nsnm);
 	}
 
-	free(smp->nsnm);
+	for (uint32_t jx= 0; jx < n_psps; jx++) {
+		if (psps[jx].nsnm != NULL) {
+			free(psps[jx].nsnm);
+		}
+	}
 
-	for (uint32_t jx= 0; jx < n_ssps; jx++) {
-		free(ssps[jx].nsnm);
+	if (n_ssps > 0) {
+		if (smp->nsnm != NULL) {
+			free(smp->nsnm);
+		}
+
+		for (uint32_t jx= 0; jx < n_ssps; jx++) {
+			if (ssps[jx].nsnm != NULL) {
+				free(ssps[jx].nsnm);
+			}
+		}
 	}
 
 	return success;
@@ -3244,7 +3296,9 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 					", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 		}
 
-		free(ptp->nsnm);
+		if (ptp->nsnm != NULL) {
+			free(ptp->nsnm);
+		}
 
 		return false;
 	}
@@ -3277,10 +3331,14 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 						ix + (uint32_t)AS_XMEM_ARENA_KEY, inst, nsnm, nsid);
 			}
 
-			free(ptp->nsnm);
+			if (ptp->nsnm != NULL) {
+				free(ptp->nsnm);
+			}
 
 			for (uint32_t jx = 0; jx < n_psps; jx++) {
-				free(psps[jx].nsnm);
+				if (psps[jx].nsnm != NULL) {
+					free(psps[jx].nsnm);
+				}
 			}
 
 			return false;
@@ -3308,10 +3366,14 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 					", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 		}
 
-		free(ptp->nsnm);
+		if (ptp->nsnm != NULL) {
+			free(ptp->nsnm);
+		}
 
 		for (uint32_t jx= 0; jx < n_psps; jx++) {
-			free(psps[jx].nsnm);
+			if (psps[jx].nsnm != NULL) {
+				free(psps[jx].nsnm);
+			}
 		}
 
 		// TODO: If (n_smps > 1) will leak smp->nsnm;
@@ -3345,13 +3407,19 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 						", namespace \'%s\' (nsid %d).\n", inst, nsnm, nsid);
 			}
 
-			free(ptp->nsnm);
-
-			for (uint32_t jx= 0; jx < n_psps; jx++) {
-				free(psps[jx].nsnm);
+			if (ptp->nsnm != NULL) {
+				free(ptp->nsnm);
 			}
 
-			free(smp->nsnm);
+			for (uint32_t jx= 0; jx < n_psps; jx++) {
+				if (psps[jx].nsnm != NULL) {
+					free(psps[jx].nsnm);
+				}
+			}
+
+			if (smp->nsnm != NULL) {
+				free(smp->nsnm);
+			}
 
 			return false;
 		}
@@ -3384,16 +3452,24 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 							ix + (uint32_t)AS_XMEM_ARENA_KEY, inst, nsnm, nsid);
 				}
 
-				free(ptp->nsnm);
-
-				for (uint32_t jx= 0; jx < n_psps; jx++) {
-					free(psps[jx].nsnm);
+				if (ptp->nsnm != NULL) {
+					free(ptp->nsnm);
 				}
 
-				free(smp->nsnm);
+				for (uint32_t jx= 0; jx < n_psps; jx++) {
+					if (psps[jx].nsnm != NULL) {
+						free(psps[jx].nsnm);
+					}
+				}
+
+				if (smp->nsnm != NULL) {
+					free(smp->nsnm);
+				}
 
 				for (uint32_t jx = 0; jx < n_ssps; jx++) {
-					free(ssps[jx].nsnm);
+					if (ssps[jx].nsnm != NULL) {
+						free(ssps[jx].nsnm);
+					}
 				}
 
 				return false;
@@ -3418,16 +3494,24 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 					files[base_ix].nsnm, files[base_ix].nsid);
 		}
 
-		free(ptp->nsnm);
-
-		for (uint32_t ix = 0; ix < n_psps; ix++) {
-			free(psps[ix].nsnm);
+		if (ptp->nsnm != NULL) {
+			free(ptp->nsnm);
 		}
 
-		free(smp->nsnm);
+		for (uint32_t jx= 0; jx < n_psps; jx++) {
+			if (psps[jx].nsnm != NULL) {
+				free(psps[jx].nsnm);
+			}
+		}
 
-		for (uint32_t ix = 0; ix < n_ssps; ix++) {
-			free(ssps[ix].nsnm);
+		if (smp->nsnm != NULL) {
+			free(smp->nsnm);
+		}
+
+		for (uint32_t jx = 0; jx < n_ssps; jx++) {
+			if (ssps[jx].nsnm != NULL) {
+				free(ssps[jx].nsnm);
+			}
 		}
 
 		return false;
@@ -3451,16 +3535,24 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 			printf("\n");
 		}
 
-		free(ptp->nsnm);
-
-		for (uint32_t ix = 0; ix < n_psps; ix++) {
-			free(psps[ix].nsnm);
+		if (ptp->nsnm != NULL) {
+			free(ptp->nsnm);
 		}
 
-		free(smp->nsnm);
+		for (uint32_t jx= 0; jx < n_psps; jx++) {
+			if (psps[jx].nsnm != NULL) {
+				free(psps[jx].nsnm);
+			}
+		}
 
-		for (uint32_t ix = 0; ix < n_ssps; ix++) {
-			free(ssps[ix].nsnm);
+		if (smp->nsnm != NULL) {
+			free(smp->nsnm);
+		}
+
+		for (uint32_t jx = 0; jx < n_ssps; jx++) {
+			if (ssps[jx].nsnm != NULL) {
+				free(ssps[jx].nsnm);
+			}
 		}
 
 		return true;
@@ -3471,16 +3563,24 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 		bool success = restore_candidate(pbp, ptp, psps, n_psps, smp, ssps,
 				n_ssps);
 
-		free(ptp->nsnm);
-
-		for (uint32_t ix = 0; ix < n_psps; ix++) {
-			free(psps[ix].nsnm);
+		if (ptp->nsnm != NULL) {
+			free(ptp->nsnm);
 		}
 
-		free(smp->nsnm);
+		for (uint32_t jx= 0; jx < n_psps; jx++) {
+			if (psps[jx].nsnm != NULL) {
+				free(psps[jx].nsnm);
+			}
+		}
 
-		for (uint32_t ix = 0; ix < n_ssps; ix++) {
-			free(ssps[ix].nsnm);
+		if (smp->nsnm != NULL) {
+			free(smp->nsnm);
+		}
+
+		for (uint32_t jx = 0; jx < n_ssps; jx++) {
+			if (ssps[jx].nsnm != NULL) {
+				free(ssps[jx].nsnm);
+			}
 		}
 
 		return success;
