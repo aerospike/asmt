@@ -2,31 +2,33 @@ name: Build ASMT
 
 on:
   push:
-    branches: [ OPS-5275 ]
+    branches: [ master ]
+    tags:
+      - '*'
   pull_request:
-    branches: [ OPS-5275 ]
+    branches: [ master ]
         
 jobs:
   buils_atl:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        container: [ 'docker.qe.aerospike.com/build/aerospike-tools-alt:centos-8' ]
+        container: [ 'debian:9', 'debian:10', 'debian:11' ]
     container:
       image: ${{ matrix.container }}
       options: "--entrypoint /bin/bash"
-      credentials:
-        username: ${{ secrets.AWS_ID }}
-        password: ${{ secrets.AWS_KEY }}
     steps:
     - name: Install Dependencies (centos:7)
       run: |
+        sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-* && sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
+        yum upgrade -y
         yum install -y dnf-plugins-core
         yum-config-manager --enable powertools
         yum install -y make gcc zlib-devel zlib-static git rpm-build
       if: matrix.container == 'centos:7'
     - name: Install Dependencies (centos:8)
       run: |
+        yum upgrade -y
         yum install -y dnf-plugins-core
         yum config-manager --set-enable powertools
         yum install -y make gcc zlib-devel zlib-static git rpm-build
@@ -38,7 +40,7 @@ jobs:
       if: |
         matrix.container == 'debian:9' || matrix.container == 'debian:10' || matrix.container == 'debian:11'
     - name: Clone Source
-      run: git clone --branch OPS-5275 https://github.com/aerospike/asmt.git
+      run: git clone https://github.com/aerospike/asmt.git
     - name: buils asmt (centos)
       working-directory: ./asmt
       if: matrix.container == 'centos:7' || matrix.container == 'centos:8'
@@ -57,51 +59,11 @@ jobs:
         echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
         make all deb      
     - name: Upload Artifacts
-      uses: actions/upload-artifact@v2.2.4
+      uses: actions/upload-artifact@v2.3.1
       with:
-        name: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }}
-        path: /__w/asmt/asmt/asmt/target/packages/asmt-*
+        name: asmt-${{ env.REV }}.${{ env.OS }}.x86_64.deb
+        path: /__w/asmt/asmt/asmt/target/packages/asmt-${{ env.REV }}.${{ env.OS }}.x86_64.deb
         if-no-files-found: error
-    - name: Send mail
-      uses: dawidd6/action-send-mail@v3
-      with:
-        # Required mail server address:
-        server_address: smtp.gmail.com
-        # Required mail server port:
-        server_port: 465
-        # Optional (recommended): mail server username:
-        username: ${{secrets.MAIL_ADDRESS}}
-        # Optional (recommended) mail server password:
-        password: ${{secrets.MAIL_PASSWORD}}
-        # Required mail subject:
-        subject: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }} Package Available
-        # Required recipients' addresses:
-        to: pvinh@aerospike.com
-        # Required sender full name (address can be skipped):
-        from: Phuc Vinh
-        # Optional whether this connection use TLS (default is true if server_port is 465)
-        secure: true
-        # Optional plain body:
-        body: Build job of ${{github.repository}} completed successfully!
-        # Optional HTML body read from file:
-        html_body: file:///__w/asmt/asmt/asmt/README.md
-        # Optional carbon copy recipients:
-        cc: pnv02129@yahoo.com
-        # Optional blind carbon copy recipients:
-        bcc: pnv02129@yahoo.com
-        # Optional recipient of the email response:
-        reply_to: pvinh@aerospike.com
-        # Optional Message ID this message is replying to:
-        ## in_reply_to: <random-luke@example.com>
-        # Optional unsigned/invalid certificates allowance:
-        ignore_cert: true
-        # Optional converting Markdown to HTML (set content_type to text/html too):
-        convert_markdown: true
-        # Optional attachments:
-        attachments: /__w/asmt/asmt/asmt/target/packages/asmt-*
-        # Optional priority: 'high', 'normal' (default) or 'low'
-        priority: low
-  
   build:
     strategy:
       matrix:
@@ -127,45 +89,6 @@ jobs:
     - name: Upload Artifact
       uses: actions/upload-artifact@v2.2.4
       with: 
-        name: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }}
-        path: target/packages
+        name: asmt-${{ env.REV }}.${{ env.OS }}.x86_64.deb
+        path: target/packages/asmt-${{ env.REV }}.${{ env.OS }}.x86_64.deb
         if-no-files-found: error
-    - name: Send mail
-      uses: dawidd6/action-send-mail@v3
-      with:
-        # Required mail server address:
-        server_address: smtp.gmail.com
-        # Required mail server port:
-        server_port: 465
-        # Optional (recommended): mail server username:
-        username: ${{secrets.MAIL_ADDRESS}}
-        # Optional (recommended) mail server password:
-        password: ${{secrets.MAIL_PASSWORD}}
-        # Required mail subject:
-        subject: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }} Package Available
-        # Required recipients' addresses:
-        to: pvinh@aerospike.com
-        # Required sender full name (address can be skipped):
-        from: Phuc Vinh
-        # Optional whether this connection use TLS (default is true if server_port is 465)
-        secure: true
-        # Optional plain body:
-        body: Build job of ${{github.repository}} completed successfully!
-        # Optional HTML body read from file:
-        html_body: file://README.md
-        # Optional carbon copy recipients:
-        cc: pnv02129@yahoo.com
-        # Optional blind carbon copy recipients:
-        bcc: pnv02129@yahoo.com
-        # Optional recipient of the email response:
-        reply_to: pvinh@aerospike.com
-        # Optional Message ID this message is replying to:
-        ## in_reply_to: <random-luke@example.com>
-        # Optional unsigned/invalid certificates allowance:
-        ignore_cert: true
-        # Optional converting Markdown to HTML (set content_type to text/html too):
-        convert_markdown: true
-        # Optional attachments:
-        attachments: target/packages/*
-        # Optional priority: 'high', 'normal' (default) or 'low'
-        priority: low
