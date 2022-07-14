@@ -15,9 +15,6 @@ jobs:
     container:
       image: ${{ matrix.container }}
       options: "--entrypoint /bin/bash"
-      credentials:
-        username: ${{ secrets.AWS_ID }}
-        password: ${{ secrets.AWS_KEY }}
     steps:
     - name: Install Dependencies (centos:7)
       run: |
