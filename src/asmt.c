@@ -3871,7 +3871,7 @@ analyze_restore_sanity(as_file_t* pbp, as_file_t* ptp, as_file_t psps[],
 
 		// Check if this is an Aerospike primary segment key.
 
-		if ((key & AS_XMEM_PRI_KEY) == AS_XMEM_PRI_KEY) {
+		if ((key & AS_XMEM_KEY_TYPE_MASK) == AS_XMEM_PRI_KEY) {
 
 			// Found a valid Aerospike database primary segment.
 			// Extract the base from the key.
