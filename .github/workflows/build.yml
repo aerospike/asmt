@@ -75,7 +75,7 @@ jobs:
       run: sudo apt-get install make gcc libc6-dev zlib1g-dev
       if: matrix.os == 'ubuntu-20.04'
     - name: Get Sources
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3.0.2
       with:
         fetch-depth: 0
     - name: Set env
@@ -87,7 +87,7 @@ jobs:
     - name: build
       run: make all deb
     - name: Upload Artifact
-      uses: actions/upload-artifact@v2.2.4
+      uses: actions/upload-artifact@v2.3.1
       with: 
         name: asmt-${{ env.REV }}.${{ env.OS }}.x86_64.deb
         path: target/packages/asmt-${{ env.REV }}.${{ env.OS }}.x86_64.deb
