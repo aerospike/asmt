@@ -40,7 +40,7 @@ jobs:
       if: |
         matrix.container == 'debian:9' || matrix.container == 'debian:10' || matrix.container == 'debian:11'
     - name: Clone Source
-      run: git clone --branch OPS-5275 https://github.com/aerospike/asmt.git
+      run: git clone https://github.com/aerospike/asmt.git
     - name: buils asmt (centos)
       working-directory: ./asmt
       if: matrix.container == 'centos:7' || matrix.container == 'centos:8'
@@ -59,10 +59,10 @@ jobs:
         echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
         make all deb      
     - name: Upload Artifacts
-      uses: actions/upload-artifact@v2.2.4
+      uses: actions/upload-artifact@v2.3.1
       with:
-        name: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }}
-        path: /__w/asmt/asmt/asmt/target/packages/asmt-*
+        name: asmt-${{ env.REV }}.${{ env.OS }}.x86_64.deb
+        path: /__w/asmt/asmt/asmt/target/packages/asmt-${{ env.REV }}.${{ env.OS }}.x86_64.deb
         if-no-files-found: error
   build:
     strategy:
@@ -89,6 +89,6 @@ jobs:
     - name: Upload Artifact
       uses: actions/upload-artifact@v2.2.4
       with: 
-        name: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }}
-        path: target/packages
+        name: asmt-${{ env.REV }}.${{ env.OS }}.x86_64.deb
+        path: target/packages/asmt-${{ env.REV }}.${{ env.OS }}.x86_64.deb
         if-no-files-found: error
