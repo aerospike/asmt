@@ -1,5 +1,15 @@
 # Makes asmt (Aerospike shared memory tool).
 
+ARCH = $(shell uname -m)
+
+ifeq ($(ARCH), x86_64)
+	CFLAGS = -march=nocona
+else ifeq ($(ARCH), aarch64)
+	CFLAGS = -mcpu=neoverse-n1
+else
+	$(error unhandled arch "$(ARCH)")
+endif
+
 DIR_TARGET = target
 DIST_DIR = dist
 DIR_OBJ = $(DIR_TARGET)/obj
@@ -23,7 +33,7 @@ ALL_DEPENDENCIES = $(ALL_OBJECTS:%.o=%.d)
 
 MAKE = make
 CC = gcc
-CFLAGS = -g -fno-common -std=gnu99 -D_REENTRANT -D_FILE_OFFSET_BITS=64 -Wall -Wextra -O3
+CFLAGS += -g -fno-common -std=gnu99 -D_REENTRANT -D_FILE_OFFSET_BITS=64 -Wall -Wextra -O3
 CFLAGS += -D_GNU_SOURCE -MMD
 LDFLAGS = $(CFLAGS)
 INCLUDES = -Isrc -I/usr/include
