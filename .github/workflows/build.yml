@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        container: [ 'docker.qe.aerospike.com/build/aerospike-tools-alt:centos-8' ]
+        container: [ 'docker.qe.aerospike.com/build/aerospike-tools-alt:centos-8',  'docker.qe.aerospike.com/build/aerospike-server:arm-rhel-8' ]
     container:
       image: ${{ matrix.container }}
       options: "--entrypoint /bin/bash"

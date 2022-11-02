@@ -4,7 +4,7 @@ Release: 1%{?dist}
 Summary: The Aerospike Shared Memory Tool
 License: Apache 2.0 license
 Group: Application
-BuildArch: x86_64
+BuildArch: @ARCH@
 %description
 ASMT provides a program for backing up and restoring the primary index of 
 an Aerospike Database Enterprise Edition (EE).
