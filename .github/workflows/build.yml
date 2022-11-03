@@ -2,11 +2,11 @@ name: Build ASMT
 
 on:
   push:
-    branches: [ master ]
+    branches: [ TOOLS-2226 ]
     tags:
       - '*'
   pull_request:
-    branches: [ master ]
+    branches: [ TOOLS-2226 ]
         
 jobs:
   buils_atl:
