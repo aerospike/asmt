@@ -62,45 +62,45 @@ jobs:
         name: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }}
         path: /__w/asmt/asmt/asmt/target/packages/asmt-*
         if-no-files-found: error
-    - name: Send mail
-      uses: dawidd6/action-send-mail@v3
-      with:
+#    - name: Send mail
+#      uses: dawidd6/action-send-mail@v3
+#      with:
         # Required mail server address:
-        server_address: smtp.gmail.com
+#        server_address: smtp.gmail.com
         # Required mail server port:
-        server_port: 465
+#       server_port: 465
         # Optional (recommended): mail server username:
-        username: ${{secrets.MAIL_ADDRESS}}
+#        username: ${{secrets.MAIL_ADDRESS}}
         # Optional (recommended) mail server password:
-        password: ${{secrets.MAIL_PASSWORD}}
+#        password: ${{secrets.MAIL_PASSWORD}}
         # Required mail subject:
-        subject: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }} Package Available
+#        subject: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }} Package Available
         # Required recipients' addresses:
-        to: pvinh@aerospike.com
+#        to: pvinh@aerospike.com
         # Required sender full name (address can be skipped):
-        from: Phuc Vinh
+#        from: Phuc Vinh
         # Optional whether this connection use TLS (default is true if server_port is 465)
-        secure: true
+#        secure: true
         # Optional plain body:
-        body: Build job of ${{github.repository}} completed successfully!
+#        body: Build job of ${{github.repository}} completed successfully!
         # Optional HTML body read from file:
-        html_body: file:///__w/asmt/asmt/asmt/README.md
+#        html_body: file:///__w/asmt/asmt/asmt/README.md
         # Optional carbon copy recipients:
-        cc: pnv02129@yahoo.com
+#        cc: pnv02129@yahoo.com
         # Optional blind carbon copy recipients:
-        bcc: pnv02129@yahoo.com
+#        bcc: pnv02129@yahoo.com
         # Optional recipient of the email response:
-        reply_to: pvinh@aerospike.com
+#        reply_to: pvinh@aerospike.com
         # Optional Message ID this message is replying to:
         ## in_reply_to: <random-luke@example.com>
         # Optional unsigned/invalid certificates allowance:
-        ignore_cert: true
+#        ignore_cert: true
         # Optional converting Markdown to HTML (set content_type to text/html too):
-        convert_markdown: true
+#        convert_markdown: true
         # Optional attachments:
-        attachments: /__w/asmt/asmt/asmt/target/packages/asmt-*
+#        attachments: /__w/asmt/asmt/asmt/target/packages/asmt-*
         # Optional priority: 'high', 'normal' (default) or 'low'
-        priority: low
+#        priority: low
   
   build:
     strategy:
@@ -130,42 +130,42 @@ jobs:
         name: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }}
         path: target/packages
         if-no-files-found: error
-    - name: Send mail
-      uses: dawidd6/action-send-mail@v3
-      with:
+#    - name: Send mail
+#      uses: dawidd6/action-send-mail@v3
+#      with:
         # Required mail server address:
-        server_address: smtp.gmail.com
+#        server_address: smtp.gmail.com
         # Required mail server port:
-        server_port: 465
+#        server_port: 465
         # Optional (recommended): mail server username:
-        username: ${{secrets.MAIL_ADDRESS}}
+#        username: ${{secrets.MAIL_ADDRESS}}
         # Optional (recommended) mail server password:
-        password: ${{secrets.MAIL_PASSWORD}}
+#        password: ${{secrets.MAIL_PASSWORD}}
         # Required mail subject:
-        subject: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }} Package Available
+#        subject: asmt-${{ env.REV }}-${{ env.OS }}-${{ env.GITHUB_SHA_SHORT }} Package Available
         # Required recipients' addresses:
-        to: pvinh@aerospike.com
+#        to: pvinh@aerospike.com
         # Required sender full name (address can be skipped):
-        from: Phuc Vinh
+#        from: Phuc Vinh
         # Optional whether this connection use TLS (default is true if server_port is 465)
-        secure: true
+#        secure: true
         # Optional plain body:
-        body: Build job of ${{github.repository}} completed successfully!
+#        body: Build job of ${{github.repository}} completed successfully!
         # Optional HTML body read from file:
-        html_body: file://README.md
+#        html_body: file://README.md
         # Optional carbon copy recipients:
-        cc: pnv02129@yahoo.com
+#        cc: pnv02129@yahoo.com
         # Optional blind carbon copy recipients:
-        bcc: pnv02129@yahoo.com
+#        bcc: pnv02129@yahoo.com
         # Optional recipient of the email response:
-        reply_to: pvinh@aerospike.com
+#        reply_to: pvinh@aerospike.com
         # Optional Message ID this message is replying to:
         ## in_reply_to: <random-luke@example.com>
         # Optional unsigned/invalid certificates allowance:
-        ignore_cert: true
+#        ignore_cert: true
         # Optional converting Markdown to HTML (set content_type to text/html too):
-        convert_markdown: true
+#        convert_markdown: true
         # Optional attachments:
-        attachments: target/packages/*
+#        attachments: target/packages/*
         # Optional priority: 'high', 'normal' (default) or 'low'
-        priority: low
+#        priority: low
