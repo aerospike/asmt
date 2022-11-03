@@ -15,9 +15,9 @@ jobs:
     container:
       image: ${{ matrix.container }}
       options: "--entrypoint /bin/bash"
-      credentials:
-        username: pvinhspike
-        password: 'IthAeng2c@uKe'
+#      credentials:
+#        username: ${{ secrets.QE_AWS_ID }}
+#        password: ${{ secrets.QE_AWS_KEY }}
     steps:
     - name: Install Dependencies (centos:7)
       run: |
@@ -105,7 +105,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ 'ubuntu-20.04', 'ubuntu-18.04' ]
+        os: [ 'ubuntu-20.04', 'ubuntu-18.04', 'raspios_lite_arm64' ]
     runs-on: ${{ matrix.os }}
 
     steps:
