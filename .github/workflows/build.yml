@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        container: [ 'docker.qe.aerospike.com/build/aerospike-tools-alt:centos-8',  'docker.qe.aerospike.com/build/aerospike-server:arm-rhel-8' ]
+        container: [ 'dietpi:rpi_armv8_bullseye' ]
     container:
       image: ${{ matrix.container }}
       options: "--entrypoint /bin/bash"
@@ -39,6 +39,8 @@ jobs:
         matrix.container == 'debian:9' || matrix.container == 'debian:10' || matrix.container == 'debian:11'
     - name: Clone Source
       run: git clone --branch OPS-5275 https://github.com/aerospike/asmt.git
+    - name: arm64
+      uses: pguyot/arm-runner-action@v2
     - name: buils asmt (centos)
       working-directory: ./asmt
       if: matrix.container == 'centos:7' || matrix.container == 'centos:8'
@@ -105,7 +107,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ 'ubuntu-20.04', 'ubuntu-18.04', 'raspios_lite_arm64' ]
+        os: [ 'ubuntu-20.04', 'ubuntu-18.04' ]
     runs-on: ${{ matrix.os }}
 
     steps:
