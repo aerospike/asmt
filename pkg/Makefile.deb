@@ -7,6 +7,7 @@ export ETC_BASE = $(DEB_BUILD_ROOT)/etc/aerospike
 
 REV = $(shell build/version)
 OS = $(shell build/os_version)
+ARCH=$(shell uname -m)
 MANIFEST_DIR = manifest/TEMP
 
 .PHONY: default
@@ -37,7 +38,7 @@ dist:
 
 	sed 's/@VERSION@/'$(REV)'/g' <pkg/deb/control >$(DEB_BUILD_ROOT)/DEBIAN/control
 
-	fakeroot dpkg-deb --build $(DEB_BUILD_ROOT) target/packages/asmt-$(REV).$(OS).x86_64.deb
+	fakeroot dpkg-deb --build $(DEB_BUILD_ROOT) target/packages/asmt_$(REV)-1$(OS)_$(ARCH).deb
 	rm -rf dist
 
 distclean:
