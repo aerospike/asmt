@@ -207,8 +207,7 @@ jobs:
      
           run: |
             pwd
-            apt-get -y update
-            apt-get -y install make ibc6-dev zlib1g-dev build-essential
+            apt-get -y install make gcc ibc6-dev zlib1g-dev build-essential
             echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
             echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
             echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
