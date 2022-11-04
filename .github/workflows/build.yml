@@ -9,7 +9,7 @@ on:
     branches: [ TOOLS-2226 ]
         
 jobs:
-  buils_atl:
+  buils_x86_64_atl:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -66,7 +66,7 @@ jobs:
         name: asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
         path: /__w/asmt/asmt/asmt/target/packages/asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
         if-no-files-found: error
-  build:
+  build_x86_64:
     strategy:
       matrix:
         os: [ 'ubuntu-20.04', 'ubuntu-18.04', 'ubuntu-22.04' ]
@@ -95,3 +95,40 @@ jobs:
         name: asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
         path: target/packages/asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
         if-no-files-found: error
+  build_arm:
+    strategy:
+      matrix:
+        os: [ 'ubuntu-20.04', 'ubuntu-18.04' ]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Install Dependencies arm ubuntu20.04
+      run: |
+        sudo apt-get update 
+        sudo apt-get install make gcc-9-plugin-dev libc6-dev zlib1g-dev
+      if: matrix.os == 'ubuntu-20.04'
+    - name: Install Dependencies arm ubuntu20.04
+      run: |
+        sudo apt-get update
+        sudo apt-get install make gcc-9 g++-9 gcc-9-plugin-dev libc6-dev zlib1g-dev
+      if: matrix.os == 'ubuntu-18.04'
+    - name: Get Sources
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - name: Set env
+      run: |
+        echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
+        echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
+        echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
+        echo "ARCH=$(make -f pkg/Makefile.deb print-ARCH)" >> $GITHUB_ENV
+        ls -la
+    - name: build
+      run: make all deb
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3.1.1
+      with:
+        name: asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
+        path: target/packages/asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
+        if-no-files-found: error
+        
