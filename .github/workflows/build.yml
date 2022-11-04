@@ -9,7 +9,7 @@ on:
     branches: [ TOOLS-2226 ]
         
 jobs:
-  buils_x86_64_atl:
+  buils_x86_64_debian:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -17,7 +17,9 @@ jobs:
     container:
       image: ${{ matrix.container }}
       options: "--entrypoint /bin/bash"
+
     steps:
+
     - name: Install Dependencies (centos:7)
       run: |
         sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-* && sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
@@ -26,6 +28,7 @@ jobs:
         yum-config-manager --enable powertools
         yum install -y make gcc zlib-devel zlib-static git rpm-build
       if: matrix.container == 'centos:7'
+
     - name: Install Dependencies (centos:8)
       run: |
         yum upgrade -y
@@ -33,14 +36,17 @@ jobs:
         yum config-manager --set-enable powertools
         yum install -y make gcc zlib-devel zlib-static git rpm-build
       if: matrix.container == 'centos:8'
+
     - name: Install Dependencies (Debian)
       run: |
         apt-get -y update
         apt-get -y install make gcc libc6-dev zlib1g-dev git build-essential
       if: |
         matrix.container == 'debian:10' || matrix.container == 'debian:11'
+
     - name: Clone Source
       run: git clone --branch TOOLS-2226 https://github.com/aerospike/asmt.git
+
     - name: buils asmt (centos)
       working-directory: ./asmt
       if: matrix.container == 'centos:7' || matrix.container == 'centos:8'
@@ -50,6 +56,7 @@ jobs:
         echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
         echo "ARCH=$(make -f pkg/Makefile.rpm print-ARCH)" >> $GITHUB_ENV
         make all rpm
+
     - name: build asmt (debian)
       working-directory: ./asmt
       if: |
@@ -60,26 +67,30 @@ jobs:
         echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
         echo "ARCH=$(make -f pkg/Makefile.deb print-ARCH)" >> $GITHUB_ENV
         make all deb      
+
     - name: Upload Artifacts
       uses: actions/upload-artifact@v3.1.1
       with:
         name: asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
         path: /__w/asmt/asmt/asmt/target/packages/asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
         if-no-files-found: error
-  build_x86_64:
+
+  build_x86_64_ubuntu:
     strategy:
       matrix:
         os: [ 'ubuntu-20.04', 'ubuntu-18.04', 'ubuntu-22.04' ]
     runs-on: ${{ matrix.os }}
-
     steps:
+
     - name: Install Dependencies
       run: sudo apt-get install make gcc libc6-dev zlib1g-dev
       if: matrix.os == 'ubuntu-20.04'
+
     - name: Get Sources
       uses: actions/checkout@v3
       with:
         fetch-depth: 0
+
     - name: Set env
       run: |
         echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
@@ -87,49 +98,83 @@ jobs:
         echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
         echo "ARCH=$(make -f pkg/Makefile.deb print-ARCH)" >> $GITHUB_ENV
         ls -la
+
     - name: build
       run: make all deb
+
     - name: Upload Artifact
       uses: actions/upload-artifact@v3.1.1
       with: 
         name: asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
         path: target/packages/asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
         if-no-files-found: error
-  build_arm:
+
+  build_arm_ubuntu:
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [ 'ubuntu-20.04', 'ubuntu-18.04' ]
-    runs-on: ${{ matrix.os }}
-
+        container: [ 'arm64v8/ubuntu:bionic', 'arm64v8/ubuntu:focal', 'arm64v8/ubuntu:jammy' ]
+    container:
+      image: ${{ matrix.container }}
+      options: "--entrypoint /bin/bash"
     steps:
-    - name: Install Dependencies arm ubuntu20.04
+
+    - name: Install Dependencies arm ubuntu
       run: |
         sudo apt-get update
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -f tzdata 
-        sudo apt-get install make gcc-9-plugin-dev libc6-dev zlib1g-dev
-      if: matrix.os == 'ubuntu-20.04'
-    - name: Install Dependencies arm ubuntu20.04
-      run: |
-        sudo apt-get update
-        sudo apt-get install make gcc-9 g++-9 gcc-9-plugin-dev libc6-dev zlib1g-dev
-      if: matrix.os == 'ubuntu-18.04'
-    - name: Get Sources
-      uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+        sudo apt-get install make gcc libc6-dev zlib1g-dev
+
+    - name: Clone Source
+      run: git clone --branch TOOLS-2226 https://github.com/aerospike/asmt.git
+
     - name: Set env
       run: |
         echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
         echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
         echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
         echo "ARCH=$(make -f pkg/Makefile.deb print-ARCH)" >> $GITHUB_ENV
-        ls -la
+
     - name: build
       run: make all deb
+
     - name: Upload Artifact
       uses: actions/upload-artifact@v3.1.1
       with:
         name: asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
         path: target/packages/asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
         if-no-files-found: error
-        
+
+  build_arm_debian:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        container: [ 'arm64v8/debian:bullseye', 'arm64v8/ubuntu:buster' ]
+    container:
+      image: ${{ matrix.container }}
+      options: "--entrypoint /bin/bash"
+    steps:
+
+    - name: Install Dependencies arm ubuntu
+      run: |
+        sudo apt-get update
+        apt-get -y install make gcc libc6-dev zlib1g-dev git build-essential
+
+    - name: Clone Source
+      run: git clone --branch TOOLS-2226 https://github.com/aerospike/asmt.git
+
+    - name: Set env
+      run: |
+        echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
+        echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
+        echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
+        echo "ARCH=$(make -f pkg/Makefile.deb print-ARCH)" >> $GITHUB_ENV
+    
+    - name: build
+      run: make all deb
+    
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3.1.1
+      with:
+        name: asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
+        path: target/packages/asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
+        if-no-files-found: error        
