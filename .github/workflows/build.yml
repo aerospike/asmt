@@ -209,6 +209,7 @@ jobs:
 
           # The shell to run commands with in the container
           shell: /bin/sh
+      - name: build it    
         run: |
           echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
           echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
