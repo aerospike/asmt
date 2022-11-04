@@ -45,9 +45,10 @@ jobs:
       working-directory: ./asmt
       if: matrix.container == 'centos:7' || matrix.container == 'centos:8'
       run: |
-        echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
-        echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
+        echo "REV=$(make -f pkg/Makefile.rpm print-REV)" >> $GITHUB_ENV
+        echo "OS=$(make -f pkg/Makefile.rpm print-OS)" >> $GITHUB_ENV
         echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
+        echo "ARCH=$(make -f pkg/Makefile.rpm print-ARCH)" >> $GITHUB_ENV
         make all rpm
     - name: build asmt (debian)
       working-directory: ./asmt
@@ -57,12 +58,13 @@ jobs:
         echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
         echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
         echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
+        echo "ARCH=$(make -f pkg/Makefile.deb print-ARCH)" >> $GITHUB_ENV
         make all deb      
     - name: Upload Artifacts
       uses: actions/upload-artifact@v2.3.1
       with:
-        name: asmt-${{ env.REV }}.${{ env.OS }}.x86_64.deb
-        path: /__w/asmt/asmt/asmt/target/packages/asmt-${{ env.REV }}.${{ env.OS }}.x86_64.deb
+        name: asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
+        path: /__w/asmt/asmt/asmt/target/packages/asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
         if-no-files-found: error
   build:
     strategy:
@@ -83,12 +85,13 @@ jobs:
         echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
         echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
         echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
+        echo "ARCH=$(make -f pkg/Makefile.deb print-ARCH)" >> $GITHUB_ENV
         ls -la
     - name: build
       run: make all deb
     - name: Upload Artifact
       uses: actions/upload-artifact@v2.3.1
       with: 
-        name: asmt-${{ env.REV }}.${{ env.OS }}.x86_64.deb
-        path: target/packages/asmt-${{ env.REV }}.${{ env.OS }}.x86_64.deb
+        name: asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
+        path: target/packages/asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
         if-no-files-found: error
