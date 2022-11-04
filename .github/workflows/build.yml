@@ -78,7 +78,7 @@ jobs:
   build_x86_64_ubuntu:
     strategy:
       matrix:
-        os: [ 'ubuntu-20.04', 'ubuntu-18.04', 'ubuntu-22.04' ]
+        os: [ 'ubuntu-20.04', 'ubuntu-18.04' ]
     runs-on: ${{ matrix.os }}
     steps:
 
@@ -113,7 +113,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        container: [ 'arm64v8/ubuntu:bionic', 'arm64v8/ubuntu:focal', 'arm64v8/ubuntu:jammy' ]
+        container: [ 'arm64v8/ubuntu:bionic', 'arm64v8/ubuntu:focal' ]
     container:
       image: ${{ matrix.container }}
       options: "--entrypoint /bin/bash"
