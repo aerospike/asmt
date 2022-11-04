@@ -206,7 +206,7 @@ jobs:
           shell: /bin/sh
      
           run: |
-            sudo apt-get -y update
+            apt-get -y update
             apt-get -y install make gcc libc6-dev zlib1g-dev git build-essential
             echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
             echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
