@@ -191,13 +191,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Build in arm64 container
-        uses: uraimo/run-on-arch-action@v2.1.1
+        uses: uraimo/run-on-arch-action@v2.3.0
         with:
           arch: aarch64
           distro: ubuntu20.04
           # Install deps into the container. With the token, the container will be cached
           # The image is cached publically like a package
           #githubToken: ${{ github.token }}
+          shell: /bin/bash
           install: |
             apt-get -y update
             apt-get -y install make gcc git zlib1g-dev build-essential
