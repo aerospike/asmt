@@ -110,7 +110,7 @@ jobs:
         if-no-files-found: error
 
   build_arm_ubuntu:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     strategy:
       matrix:
         container: [ 'arm64v8/ubuntu:bionic', 'arm64v8/ubuntu:focal' ]
@@ -145,7 +145,7 @@ jobs:
         if-no-files-found: error
 
   build_arm_debian:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     strategy:
       matrix:
         container: [ 'arm64v8/debian:bullseye', 'arm64v8/ubuntu:buster' ]
