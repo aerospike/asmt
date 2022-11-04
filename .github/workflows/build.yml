@@ -105,7 +105,7 @@ jobs:
     - name: Install Dependencies arm ubuntu20.04
       run: |
         sudo apt-get update
-        sudo DEBIAN_FRONTEND=noninteractive atp-get install -y -f tzdata 
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -f tzdata 
         sudo apt-get install make gcc-9-plugin-dev libc6-dev zlib1g-dev
       if: matrix.os == 'ubuntu-20.04'
     - name: Install Dependencies arm ubuntu20.04
