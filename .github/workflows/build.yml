@@ -200,7 +200,7 @@ jobs:
           #githubToken: ${{ github.token }}
           install: |
             apt-get -y update
-            apt-get -y install make gcc ibc6-dev zlib1g-dev build-essential
+            apt-get -y install make gcc zlib1g-dev build-essential
   
           run: |
             pwd
