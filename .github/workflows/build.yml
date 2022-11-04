@@ -40,7 +40,7 @@ jobs:
       if: |
         matrix.container == 'debian:10' || matrix.container == 'debian:11'
     - name: Clone Source
-      run: git clone https://github.com/aerospike/asmt.git
+      run: git clone --branch TOOLS-2226 https://github.com/aerospike/asmt.git
     - name: buils asmt (centos)
       working-directory: ./asmt
       if: matrix.container == 'centos:7' || matrix.container == 'centos:8'
