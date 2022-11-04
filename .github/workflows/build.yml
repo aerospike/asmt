@@ -203,6 +203,7 @@ jobs:
             apt-get -y install make gcc git zlib1g-dev build-essential
   
           run: |
+            git config --global --add safe.directory /home/runner/work/asmt/asmt
             pwd
             echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
             echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
