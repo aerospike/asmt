@@ -110,7 +110,7 @@ jobs:
         if-no-files-found: error
 
   build_arm_ubuntu:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         container: [ 'arm64v8/ubuntu:bionic', 'arm64v8/ubuntu:focal' ]
@@ -118,34 +118,41 @@ jobs:
       image: ${{ matrix.container }}
       options: "--entrypoint /bin/bash"
     steps:
+      - name: Set up QEMU - arm
+        if: ${{ runner.arch == 'X86' || runner.arch == 'X64' }}
+        id: qemu-arm64
+        uses: docker/setup-qemu-action@v1
+        with:
+          image: tonistiigi/binfmt:latest
+          platforms: arm64
+     
+      - name: Clone Source
+        run: git clone --branch TOOLS-2226 https://github.com/aerospike/asmt.git
 
-    - name: Install Dependencies arm ubuntu
-      run: |
-        sudo apt-get update
-        sudo apt-get install make gcc libc6-dev zlib1g-dev
+      - name: install depebdencies
+        run: |
+         sudo apt-get update
+         sudo apt-get install make gcc libc6-dev zlib1g-dev
+         
+      - name: set env
+        run: |
+          echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
+          echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
+          echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
+          echo "ARCH=$(make -f pkg/Makefile.deb print-ARCH)" >> $GITHUB_ENV
 
-    - name: Clone Source
-      run: git clone --branch TOOLS-2226 https://github.com/aerospike/asmt.git
+      - name: build
+        run: make all deb
 
-    - name: Set env
-      run: |
-        echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
-        echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
-        echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
-        echo "ARCH=$(make -f pkg/Makefile.deb print-ARCH)" >> $GITHUB_ENV
-
-    - name: build
-      run: make all deb
-
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v3.1.1
-      with:
-        name: asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
-        path: target/packages/asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
-        if-no-files-found: error
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3.1.1
+        with:
+          name: asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
+          path: target/packages/asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
+          if-no-files-found: error
 
   build_arm_debian:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         container: [ 'arm64v8/debian:bullseye', 'arm64v8/ubuntu:buster' ]
@@ -181,7 +188,7 @@ jobs:
 
   build_job:
     # The host should always be linux
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     name: Build on ${{ matrix.distro }} ${{ matrix.arch }}
 
     # Run steps on a matrix of 3 arch/distro combinations
