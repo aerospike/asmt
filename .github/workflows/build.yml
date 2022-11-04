@@ -119,9 +119,7 @@ jobs:
       options: "--entrypoint /bin/bash"
     steps:
       - name: Set up QEMU - arm
-        if: ${{ runner.arch == 'X86' || runner.arch == 'X64' }}
-        id: qemu-arm64
-        uses: docker/setup-qemu-action@v1
+        uses: docker/setup-qemu-action@v2
         with:
           image: tonistiigi/binfmt:latest
           platforms: arm64
