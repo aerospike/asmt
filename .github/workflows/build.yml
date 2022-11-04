@@ -177,4 +177,48 @@ jobs:
       with:
         name: asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
         path: target/packages/asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
-        if-no-files-found: error        
+        if-no-files-found: error
+
+  build_job:
+    # The host should always be linux
+    runs-on: ubuntu-20.04
+    name: Build on ${{ matrix.distro }} ${{ matrix.arch }}
+
+    # Run steps on a matrix of 3 arch/distro combinations
+    strategy:
+      matrix:
+        include:
+          - arch: aarch64
+            distro: ubuntu18.04
+          - arch: aarch64
+            distro: ubuntu20.04
+          - arch: aarch64
+            distro: debian10
+    steps:
+      - uses: actions/checkout@v2.1.0
+      - uses: uraimo/run-on-arch-action@v2
+        name: Build artifact
+        id: build
+        with:
+          arch: ${{ matrix.arch }}
+          distro: ${{ matrix.distro }}
+
+          # Pass some environment variables to the container
+          env: | # YAML, but pipe character is necessary
+            artifact_name: git-${{ matrix.distro }}_${{ matrix.arch }}
+
+          # The shell to run commands with in the container
+          shell: /bin/sh
+        run: |
+          echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
+          echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
+          echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
+          echo "ARCH=$(make -f pkg/Makefile.deb print-ARCH)" >> $GITHUB_ENV
+          make all deb
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3.1.1
+        with:
+          name: asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
+          path: target/packages/asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
+          if-no-files-found: error 
+ 
