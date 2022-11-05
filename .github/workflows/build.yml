@@ -260,7 +260,7 @@ jobs:
 
           # Pass some environment variables to the container
           env: | # YAML, but pipe character is necessary
-            artifact_name: git-${{ matrix.distro }}_${{ matrix.arch }}
+            #artifact_name: git-${{ matrix.distro }}_${{ matrix.arch }}
             echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
             echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
             echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
@@ -282,8 +282,8 @@ jobs:
           # Produce a binary artifact and place it in the mounted volume
           run: |
             make all deb
-            cp $(which git) "/artifacts/${artifact_name}"
-            echo "Produced artifact at /artifacts/${artifact_name}"
+            #cp $(which git) "/artifacts/${artifact_name}"
+            #echo "Produced artifact at /artifacts/${artifact_name}"
 
       - name: Show the artifact
         # Items placed in /artifacts in the container will be in
