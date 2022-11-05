@@ -277,6 +277,7 @@ jobs:
 
           # Produce a binary artifact and place it in the mounted volume
           run: |
+            git config --global --add safe.directory /home/runner/work/asmt/asmt
             echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
             echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
             echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
