@@ -261,7 +261,6 @@ jobs:
           # Pass some environment variables to the container
           env: | # YAML, but pipe character is necessary
             artifact_name: git-${{ matrix.distro }}_${{ matrix.arch }}
-V
 
           # The shell to run commands with in the container
           shell: /bin/sh
@@ -281,7 +280,7 @@ V
             echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
             echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
             echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
-            echo "ARCH=$(make -f pkg/Makefile.deb print-ARCH)" >> $GITHUB_EN
+            echo "ARCH=$(make -f pkg/Makefile.deb print-ARCH)" >> $GITHUB_ENV
             make all deb
             cp $(which git) "/artifacts/${artifact_name}"
             echo "Produced artifact at /artifacts/${artifact_name}"
