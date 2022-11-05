@@ -140,7 +140,9 @@ jobs:
           echo "ARCH=$(make -f pkg/Makefile.deb print-ARCH)" >> $GITHUB_ENV
 
       - name: build
-        run: make all deb
+        run: |
+          cd /home/runner/work/asmt/asmt
+          make all deb
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v3.1.1
