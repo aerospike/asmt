@@ -154,76 +154,6 @@ jobs:
           path: target/packages/asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
           if-no-files-found: error
 
-  build_arm_debian:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        container: [ 'arm64v8/debian:bullseye', 'arm64v8/ubuntu:buster' ]
-    container:
-      image: ${{ matrix.container }}
-      options: "--entrypoint /bin/bash"
-    steps:
-
-    - name: Install Dependencies arm ubuntu
-      run: |
-        sudo apt-get update
-        apt-get -y install make gcc libc6-dev zlib1g-dev git build-essential
-
-    - name: Clone Source
-      run: git clone --branch TOOLS-2226 https://github.com/aerospike/asmt.git
-
-    - name: Set env
-      run: |
-        echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
-        echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
-        echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
-        echo "ARCH=$(make -f pkg/Makefile.deb print-ARCH)" >> $GITHUB_ENV
-    
-    - name: build
-      run: make all deb
-    
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v3.1.1
-      with:
-        name: asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
-        path: target/packages/asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
-        if-no-files-found: error
-
-  build-on-aarch64:
-    runs-on: ubuntu-latest
-    name: ci (arm64)
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - name: Build in arm64 container
-        uses: uraimo/run-on-arch-action@v2.3.0
-        with:
-          arch: aarch64
-          distro: ubuntu20.04
-          # Install deps into the container. With the token, the container will be cached
-          # The image is cached publically like a package
-          #githubToken: ${{ github.token }}
-          shell: /bin/bash
-          install: |
-            apt-get -y update
-            apt-get -y install make gcc git zlib1g-dev build-essential
-  
-          run: |
-            git config --global --add safe.directory /home/runner/work/asmt/asmt
-            pwd
-            echo "REV=$(make -f pkg/Makefile.deb print-REV)" >> $GITHUB_ENV
-            echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
-            echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
-            echo "ARCH=$(make -f pkg/Makefile.deb print-ARCH)" >> $GITHUB_ENV
-            make all deb
-            
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v3.1.1
-        with:
-          name: asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
-          path: target/packages/asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
-          if-no-files-found: error            
-
   build_job:
     # The host should always be linux
     runs-on: ubuntu-18.04
@@ -282,8 +212,8 @@ jobs:
             echo "OS=$(make -f pkg/Makefile.deb print-OS)" >> $GITHUB_ENV
             echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
             echo "ARCH=$(make -f pkg/Makefile.deb print-ARCH)" >> $GITHUB_ENV
-            make all deb
-            cp $(which git) "/artifacts/${artifact_name}"
+            #make all deb
+            #cp $(which git) "/artifacts/${artifact_name}"
             echo "Produced artifact at /artifacts/${artifact_name}"
 
       - name: Show the artifact
