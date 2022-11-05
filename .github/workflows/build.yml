@@ -273,7 +273,7 @@ jobs:
           # no secrets are present in the container state or logs.
           install: |
              apt-get update -q -y
-             apt-get install -q -y git make gcc zlib1g-dev build-essential
+             apt-get install -q -y git gcc build-essential
 
           # Produce a binary artifact and place it in the mounted volume
           run: |
