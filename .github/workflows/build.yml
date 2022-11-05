@@ -119,13 +119,16 @@ jobs:
       #options: "--entrypoint /bin/bash"
     steps:
       - name: Set up QEMU - arm
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v2.1.0
         with:
           image: tonistiigi/binfmt:latest
           platforms: arm64
-     
-      - name: Clone Source
-        run: git clone --branch TOOLS-2226 https://github.com/aerospike/asmt.git
+      - name: Get Sources
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      #- name: Clone Source
+        #run: git clone --branch TOOLS-2226 https://github.com/aerospike/asmt.git
 
       - name: install depebdencies
         run: |
@@ -141,7 +144,7 @@ jobs:
 
       - name: build
         run: |
-          cd /home/runner/work/asmt/asmt
+          pwd
           make all deb
 
       - name: Upload Artifact
