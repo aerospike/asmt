@@ -276,11 +276,8 @@ jobs:
           # publicly in your project's package repository, so it is vital that
           # no secrets are present in the container state or logs.
           install: |
-            case "${{ matrix.distro }}" in
-              ubuntu*|jessie|stretch|buster|bullseye)
-                apt-get update -q -y
-                apt-get install -q -y git make gcc zlib1g-dev build-essential
-              esac
+             apt-get update -q -y
+             apt-get install -q -y git make gcc zlib1g-dev build-essential
 
           # Produce a binary artifact and place it in the mounted volume
           run: |
