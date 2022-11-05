@@ -111,12 +111,12 @@ jobs:
 
   build_arm_ubuntu:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        container: [ 'arm64v8/ubuntu:bionic', 'arm64v8/ubuntu:focal' ]
-    container:
-      image: ${{ matrix.container }}
-      options: "--entrypoint /bin/bash"
+    #strategy:
+      #matrix:
+        #container: [ 'arm64v8/ubuntu:bionic', 'arm64v8/ubuntu:focal' ]
+    #container:
+      #image: ${{ matrix.container }}
+      #options: "--entrypoint /bin/bash"
     steps:
       - name: Set up QEMU - arm
         uses: docker/setup-qemu-action@v2
