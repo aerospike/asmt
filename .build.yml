@@ -23,3 +23,4 @@ build:
       - make $PKG
     artifact:
       - target/bin/*
+      - target/packages/*
