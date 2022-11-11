@@ -2,20 +2,14 @@ name: asmt
 
 container:
   - base:
-      - docker.qe.aerospike.com/build/aerospike-tools-alt:centos-7
-      - docker.qe.aerospike.com/build/aerospike-tools-alt:rhel-8
-      - docker.qe.aerospike.com/build/aerospike-tools-alt:debian-9
-      - docker.qe.aerospike.com/build/aerospike-tools-alt:debian-10
-      - docker.qe.aerospike.com/build/aerospike-tools-alt:debian-11
-      - docker.qe.aerospike.com/build/aerospike-tools-alt:ubuntu-18.04
-      - docker.qe.aerospike.com/build/aerospike-tools-alt:ubuntu-20.04
 
-      - docker.qe.aerospike.com/build/aerospike-server:x86-centos-7
-      - docker.qe.aerospike.com/build/aerospike-server:x86-rhel-8
-      - docker.qe.aerospike.com/build/aerospike-server:x86-debian-10
-      - docker.qe.aerospike.com/build/aerospike-tools-alt:arm-debian-11
+      - docker.qe.aerospike.com/build/aerospike-server:arm-centos-7
+      - docker.qe.aerospike.com/build/aerospike-server:arm-rhel-8
+      - docker.qe.aerospike.com/build/aerospike-server:arm-debian-10
+      - docker.qe.aerospike.com/build/aerospike-server:arm-debian-11
       - docker.qe.aerospike.com/build/aerospike-server:arm-ubuntu-18.04
-      - docker.qe.aerospike.com/build/aerospike-tools-alt:arm-ubuntu-20.04
+      - docker.qe.aerospike.com/build/aerospike-server:arm-ubuntu-20.04
+
 
 build:
   - name: default
