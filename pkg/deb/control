@@ -2,7 +2,7 @@ Package: asmt
 Version: @VERSION@
 Section: Databases
 Priority: optional
-Architecture: amd64
+Architecture: @ARCH@
 Depends: libc6 (>= 2.7)
 Maintainer: Aerospike, Inc. <info@aerospike.net>
 Description: Aerospike Shared Memory Tool 
