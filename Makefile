@@ -4,8 +4,10 @@ ARCH = $(shell uname -m)
 
 ifeq ($(ARCH), x86_64)
 	CFLAGS = -march=nocona
+	CC = gcc
 else ifeq ($(ARCH), aarch64)
 	CFLAGS = -mcpu=neoverse-n1
+	CC = gcc-9
 else
 	$(error unhandled arch "$(ARCH)")
 endif
@@ -32,7 +34,7 @@ ALL_OBJECTS = $(ASMT_OBJECTS)
 ALL_DEPENDENCIES = $(ALL_OBJECTS:%.o=%.d)
 
 MAKE = make
-CC = gcc
+#CC = gcc
 CFLAGS += -g -fno-common -std=gnu99 -D_REENTRANT -D_FILE_OFFSET_BITS=64 -Wall -Wextra -O3
 CFLAGS += -D_GNU_SOURCE -MMD
 LDFLAGS = $(CFLAGS)
