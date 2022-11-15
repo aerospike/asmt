@@ -1,13 +1,18 @@
 # Makes asmt (Aerospike shared memory tool).
 
 ARCH = $(shell uname -m)
+OS = $(shell build/os_version)
+
+CC = gcc
 
 ifeq ($(ARCH), x86_64)
 	CFLAGS = -march=nocona
-	CC = gcc
 else ifeq ($(ARCH), aarch64)
 	CFLAGS = -mcpu=neoverse-n1
-	CC = gcc-9
+ifeq ($(OS), ubuntu18.04)
+	CC =gcc-9
+endif
+
 else
 	$(error unhandled arch "$(ARCH)")
 endif
