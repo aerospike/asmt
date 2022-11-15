@@ -37,7 +37,8 @@ CFLAGS += -g -fno-common -std=gnu99 -D_REENTRANT -D_FILE_OFFSET_BITS=64 -Wall -W
 CFLAGS += -D_GNU_SOURCE -MMD
 LDFLAGS = $(CFLAGS)
 INCLUDES = -Isrc -I/usr/include
-LIBRARIES = -Wl,-Bstatic -lz -Wl,-Bdynamic -lpthread -lrt
+#LIBRARIES = -Wl,-Bstatic -lz -Wl,-Bdynamic -lpthread -lrt
+LIBRARIES = -lz -lpthread -lrt
 
 default: all
 
