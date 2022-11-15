@@ -1,11 +1,18 @@
 # Makes asmt (Aerospike shared memory tool).
 
 ARCH = $(shell uname -m)
+OS = $(shell build/os_version)
+
+CC = gcc
 
 ifeq ($(ARCH), x86_64)
 	CFLAGS = -march=nocona
 else ifeq ($(ARCH), aarch64)
 	CFLAGS = -mcpu=neoverse-n1
+ifeq ($(OS), ubuntu18.04)
+	CC =gcc-9
+endif
+
 else
 	$(error unhandled arch "$(ARCH)")
 endif
@@ -32,12 +39,13 @@ ALL_OBJECTS = $(ASMT_OBJECTS)
 ALL_DEPENDENCIES = $(ALL_OBJECTS:%.o=%.d)
 
 MAKE = make
-CC = gcc
+#CC = gcc
 CFLAGS += -g -fno-common -std=gnu99 -D_REENTRANT -D_FILE_OFFSET_BITS=64 -Wall -Wextra -O3
 CFLAGS += -D_GNU_SOURCE -MMD
 LDFLAGS = $(CFLAGS)
 INCLUDES = -Isrc -I/usr/include
-LIBRARIES = -Wl,-Bstatic -lz -Wl,-Bdynamic -lpthread -lrt
+#LIBRARIES = -Wl,-Bstatic -lz -Wl,-Bdynamic -lpthread -lrt
+LIBRARIES = -lz -lpthread -lrt
 
 default: all
 
