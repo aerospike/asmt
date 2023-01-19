@@ -128,8 +128,8 @@ typedef struct as_cmp_s {
 // Constant globals.
 
 static const char g_fullname[] = "Aerospike Shared Memory Tool";
-static const char g_version[] = "Version 1.2.0";
-static const char g_copyright[] = "Copyright (C) 2022 Aerospike, Inc.";
+static const char g_version[] = "Version 1.2.1";
+static const char g_copyright[] = "Copyright (C) 2023 Aerospike, Inc.";
 static const char g_all_rights[] = "All rights reserved.";
 
 static const char* FILE_EXTENSION = ".dat";
@@ -3835,8 +3835,8 @@ analyze_restore_sanity(as_file_t* pbp, as_file_t* ptp, as_file_t psps[],
 		return false;
 	}
 
-	// Check that there are no segments with the sane namespace and instance.
-	// Get info on all shared memory segments..
+	// Check that there are no segments with the same namespace and instance.
+	// Get info on all shared memory segments.
 
 	struct shmid_ds dummy; // Dummy, needed by shmctl(3).
 
@@ -3893,7 +3893,7 @@ analyze_restore_sanity(as_file_t* pbp, as_file_t* ptp, as_file_t psps[],
 
 			if (nsid == pbp->nsid && inst == pbp->inst) {
 				if (g_verbose) {
-					printf("Found existing Aerospike segment %08x with"
+					printf("Found existing Aerospike primary index segment %08x with"
 							" instance %u, namespace \'%s\' (nsid %u)"
 							": cannot restore associated file.\n",
 							ds.shm_perm.__key, inst, pbp->nsnm, nsid);
@@ -3903,7 +3903,7 @@ analyze_restore_sanity(as_file_t* pbp, as_file_t* ptp, as_file_t psps[],
 			}
 		}
 
-		if ((key & AS_XMEM_SEC_KEY) == AS_XMEM_SEC_KEY) {
+		if ((key & AS_XMEM_KEY_TYPE_MASK) == AS_XMEM_SEC_KEY) {
 			// Found a valid Aerospike database secondary segment.
 			// Extract the base from the key.
 
@@ -3922,14 +3922,16 @@ analyze_restore_sanity(as_file_t* pbp, as_file_t* ptp, as_file_t psps[],
 
 			// Check whether instance and namespace match.
 
-			if (g_verbose) {
-				printf("Found existing Aerospike segment %08x with"
-						" instance %u, namespace \'%s\' (nsid %u)"
-						": cannot restore associated file.\n",
-						ds.shm_perm.__key, inst, pbp->nsnm, nsid);
-			}
+			if (nsid == pbp->nsid && inst == pbp->inst) {
+				if (g_verbose) {
+					printf("Found existing Aerospike secondary index segment %08x with"
+							" instance %u, namespace \'%s\' (nsid %u)"
+							": cannot restore associated file.\n",
+							ds.shm_perm.__key, inst, pbp->nsnm, nsid);
+				}
 
-			found = true;
+				found = true;
+			}
 		}
 	}
 
