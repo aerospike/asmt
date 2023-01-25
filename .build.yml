@@ -23,7 +23,3 @@ build:
       - make
     artifact:
       - target/bin/*
-
-qe-registry:
-  - dockerfile: /work/source/Dockerfile
-  - tag:  docker.qe.aerospike.com/aerospike/helloworld
