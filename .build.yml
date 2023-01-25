@@ -26,4 +26,4 @@ build:
 
 qe-registry:
   - dockerfile: /work/source/Dockerfile
-  - registry:  docker.qe.aerospike.com/aerospike
+  - tag:  docker.qe.aerospike.com/aerospike/helloworld
