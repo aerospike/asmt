@@ -2,7 +2,7 @@ name: asmt
 
 container:
   - base:
-#       - docker.qe.aerospike.com/build/aerospike-tools-alt:centos-7
+      - docker.qe.aerospike.com/build/aerospike-tools-alt:centos-7
 #       - docker.qe.aerospike.com/build/aerospike-tools-alt:centos-8
 #       - docker.qe.aerospike.com/build/aerospike-tools-alt:debian-8
 #       - docker.qe.aerospike.com/build/aerospike-tools-alt:debian-9
