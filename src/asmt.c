@@ -1051,16 +1051,21 @@ check_dir(const char* pathname, bool is_write, bool create)
 
 	// Can we access it? Standard UNIX rules.
 
+	uint32_t my_uid = getuid();
+	uint32_t my_gid = getgid();
+
 	if (is_write) {
-		if ((statbuf.st_uid == getuid() && (statbuf.st_mode & S_IWUSR))
-				|| (statbuf.st_gid == getgid() && (statbuf.st_mode & S_IWGRP))
+		if (my_uid == 0 || my_gid == 0
+				|| (statbuf.st_uid == my_uid && (statbuf.st_mode & S_IWUSR))
+				|| (statbuf.st_gid == my_gid && (statbuf.st_mode & S_IWGRP))
 				|| (statbuf.st_mode & S_IWOTH)) {
 			return true;
 		}
 	}
 	else {
-		if ((statbuf.st_uid == getuid() && (statbuf.st_mode & S_IRUSR))
-				|| (statbuf.st_gid == getgid() && (statbuf.st_mode & S_IRGRP))
+		if (my_uid == 0 || my_gid == 0
+				|| (statbuf.st_uid == my_uid && (statbuf.st_mode & S_IRUSR))
+				|| (statbuf.st_gid == my_gid && (statbuf.st_mode & S_IRGRP))
 				|| (statbuf.st_mode & S_IROTH)) {
 			return true;
 		}
