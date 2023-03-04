@@ -1,7 +1,7 @@
 # Aerospike Shared Memory Tool (ASMT)
 
 ASMT provides a program for backing up and restoring the primary and secondary indexes
-of an Aerospike Database Enterpise Edition (EE).
+of an Aerospike Database Enterprise Edition (EE).
 
 * [Overview](#overview)
   * [What Does ASMT Do?](#what-does-asmt-do)
