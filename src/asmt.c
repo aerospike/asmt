@@ -128,7 +128,7 @@ typedef struct as_cmp_s {
 // Constant globals.
 
 static const char g_fullname[] = "Aerospike Shared Memory Tool";
-static const char g_version[] = "Version 1.2.1";
+static const char g_version[] = "Version 1.2.2";
 static const char g_copyright[] = "Copyright (C) 2023 Aerospike, Inc.";
 static const char g_all_rights[] = "All rights reserved.";
 
@@ -877,6 +877,7 @@ exit_nsnm_list(void)
 	for (uint32_t i = 0; i < g_nsnm_count; i++) {
 		assert(g_nsnm_array[i] != NULL);
 		free(g_nsnm_array[i]);
+		g_nsnm_array[i] = NULL;
 	}
 
 	free(g_nsnm_array);
@@ -969,10 +970,12 @@ analyze_backup(void)
 
 					if (sp->nsnm != NULL) {
 						free(sp->nsnm);
+						sp->nsnm = NULL;
 					}
 				}
 
 				free(segments);
+				segments = NULL;
 
 				return false;
 			}
@@ -997,9 +1000,11 @@ analyze_backup(void)
 
 		if (sp->nsnm != NULL) {
 			free(sp->nsnm);
+			sp->nsnm = NULL;
 		}
 	}
 	free(segments);
+	segments = NULL;
 
 	return true;
 }
@@ -1046,19 +1051,22 @@ check_dir(const char* pathname, bool is_write, bool create)
 
 	// Can we access it? Standard UNIX rules.
 
-	if (is_write) {
-		if ((statbuf.st_uid == getuid() && (statbuf.st_mode & S_IWUSR))
-				|| (statbuf.st_gid == getgid() && (statbuf.st_mode & S_IWGRP))
-				|| (statbuf.st_mode & S_IWOTH)) {
+	uint32_t my_uid = getuid();
+	uint32_t my_gid = getgid();
 
+	if (is_write) {
+		if (my_uid == 0 || my_gid == 0
+				|| (statbuf.st_uid == my_uid && (statbuf.st_mode & S_IWUSR))
+				|| (statbuf.st_gid == my_gid && (statbuf.st_mode & S_IWGRP))
+				|| (statbuf.st_mode & S_IWOTH)) {
 			return true;
 		}
 	}
 	else {
-		if ((statbuf.st_uid == getuid() && (statbuf.st_mode & S_IRUSR))
-				|| (statbuf.st_gid == getgid() && (statbuf.st_mode & S_IRGRP))
+		if (my_uid == 0 || my_gid == 0
+				|| (statbuf.st_uid == my_uid && (statbuf.st_mode & S_IRUSR))
+				|| (statbuf.st_gid == my_gid && (statbuf.st_mode & S_IRGRP))
 				|| (statbuf.st_mode & S_IROTH)) {
-
 			return true;
 		}
 	}
@@ -1110,9 +1118,11 @@ list_segments(as_segment_t** segments, uint32_t* n_segments, int* error)
 		if (segment->natt != 0) {
 			if (segment->nsnm != NULL) {
 				free(segment->nsnm);
+				segment->nsnm = NULL;
 			}
 
 			free(segment);
+			segment = NULL;
 			continue;
 		}
 
@@ -1121,9 +1131,11 @@ list_segments(as_segment_t** segments, uint32_t* n_segments, int* error)
 		if (g_inst != INV_INST && segment->inst != g_inst) {
 			if (segment->nsnm != NULL) {
 				free(segment->nsnm);
+				segment->nsnm = NULL;
 			}
 
 			free(segment);
+			segment = NULL;
 			continue;
 		}
 
@@ -1132,11 +1144,14 @@ list_segments(as_segment_t** segments, uint32_t* n_segments, int* error)
 		if (segment->type == TYPE_BASE && g_nsnm != NULL) {
 			if (segment->nsnm == NULL) {
 				free(segment);
+				segment = NULL;
 				continue;
 			}
 			else if (strcmp(segment->nsnm, g_nsnm) != 0) {
 				free(segment->nsnm);
+				segment->nsnm = NULL;
 				free(segment);
+				segment = NULL;
 				continue;
 			}
 		}
@@ -1152,6 +1167,7 @@ list_segments(as_segment_t** segments, uint32_t* n_segments, int* error)
 		memcpy(*segments + *n_segments - 1, segment, sizeof(as_segment_t));
 
 		free(segment);
+		segment = NULL;
 		// Do not free segment->nsnm: It is still in use!
 	}
 
@@ -1224,6 +1240,7 @@ stat_segment(int shmid, as_segment_t** segment, int* error)
 	if (sp->inst > MAX_INST) {
 		// Note: instance can be zero.
 		free(*segment);
+		*segment = NULL;
 		*error = ENOENT;
 		return false;
 	}
@@ -1237,6 +1254,7 @@ stat_segment(int shmid, as_segment_t** segment, int* error)
 
 	if (sp->nsid < MIN_NSID || sp->nsid > MAX_NSID) {
 		free(*segment);
+		*segment = NULL;
 		*error = ENOENT;
 		return false;
 	}
@@ -1256,6 +1274,7 @@ stat_segment(int shmid, as_segment_t** segment, int* error)
 	}
 	else {
 		free(*segment);
+		*segment = NULL;
 		*error = ENOENT;
 		return false;
 	}
@@ -1265,6 +1284,7 @@ stat_segment(int shmid, as_segment_t** segment, int* error)
 	if (sp->type == TYPE_PRI_STAGE || sp->type == TYPE_SEC_STAGE) {
 		if ((uint32_t)key < MIN_ARENA || (uint32_t)key > MAX_ARENA) {
 			free(*segment);
+			*segment = NULL;
 			*error = ENOENT;
 			return false;
 		}
@@ -1283,6 +1303,7 @@ stat_segment(int shmid, as_segment_t** segment, int* error)
 		if (memptr == (void*)-1) {
 			*error = errno;
 			free(*segment);
+			*segment = NULL;
 			return false;
 		}
 
@@ -1307,9 +1328,11 @@ stat_segment(int shmid, as_segment_t** segment, int* error)
 
 			if (sp->nsnm != NULL) {
 				free(sp->nsnm);
+				sp->nsnm = NULL;
 			}
 
 			free(*segment);
+			*segment = NULL;
 			return false;
 		}
 
@@ -1393,6 +1416,7 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 
 		if (ptp != NULL && ptp->nsnm != NULL) {
 			free(ptp->nsnm);
+			ptp->nsnm = NULL;
 		}
 
 		return false;
@@ -1428,11 +1452,13 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 
 			if (ptp != NULL && ptp->nsnm != NULL) {
 				free(ptp->nsnm);
+				ptp->nsnm = NULL;
 			}
 
 			for (uint32_t jx = 0; jx < n_psps; jx++) {
 				if (psps[jx].nsnm != NULL) {
 					free(psps[jx].nsnm);
+					psps[jx].nsnm = NULL;
 				}
 			}
 
@@ -1463,11 +1489,13 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 
 		if (ptp != NULL && ptp->nsnm != NULL) {
 			free(ptp->nsnm);
+			ptp->nsnm = NULL;
 		}
 
 		for (uint32_t jx= 0; jx < n_psps; jx++) {
 			if (psps[jx].nsnm != NULL) {
 				free(psps[jx].nsnm);
+				psps[jx].nsnm = NULL;
 			}
 		}
 
@@ -1505,17 +1533,20 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 
 			if (ptp != NULL && ptp->nsnm != NULL) {
 				free(ptp->nsnm);
+				ptp->nsnm = NULL;
 			}
 
 			for (uint32_t jx= 0; jx < n_psps; jx++) {
 				if (psps[jx].nsnm != NULL) {
 					free(psps[jx].nsnm);
+					psps[jx].nsnm = NULL;
 				}
 			}
 
 			if (n_ssps > 0) {
 				if (smp != NULL && smp->nsnm != NULL) {
 					free(smp->nsnm);
+					smp->nsnm = NULL;
 				}
 			}
 
@@ -1553,21 +1584,25 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 
 				if (ptp != NULL && ptp->nsnm != NULL) {
 					free(ptp->nsnm);
+					ptp->nsnm = NULL;
 				}
 
 				for (uint32_t jx= 0; jx < n_psps; jx++) {
 					if (psps[jx].nsnm != NULL) {
 						free(psps[jx].nsnm);
+						psps[jx].nsnm = NULL;
 					}
 				}
 
 				if (smp != NULL && smp->nsnm != NULL) {
 					free(smp->nsnm);
+					smp->nsnm = NULL;
 				}
 
 				for (uint32_t jx= 0; jx < n_ssps; jx++) {
 					if (ssps[jx].nsnm != NULL) {
 						free(ssps[jx].nsnm);
+						ssps[jx].nsnm = NULL;
 					}
 				}
 
@@ -1594,21 +1629,25 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 
 		if (ptp != NULL && ptp->nsnm != NULL) {
 			free(ptp->nsnm);
+			ptp->nsnm = NULL;
 		}
 
 		for (uint32_t jx= 0; jx < n_psps; jx++) {\
 			if (psps[jx].nsnm != NULL) {
 				free(psps[jx].nsnm);
+				psps[jx].nsnm = NULL;
 			}
 		}
 
 		if (smp != NULL && smp->nsnm != NULL) {
 			free(smp->nsnm);
+			smp->nsnm = NULL;
 		}
 
 		for (uint32_t jx= 0; jx < n_ssps; jx++) {
 			if (ssps[jx].nsnm != NULL) {
 				free(ssps[jx].nsnm);
+				ssps[jx].nsnm = NULL;
 			}
 		}
 
@@ -1636,21 +1675,25 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 
 		if (ptp->nsnm != NULL) {
 			free(ptp->nsnm);
+			ptp->nsnm = NULL;
 		}
 
 		for (uint32_t jx= 0; jx < n_psps; jx++) {
 			if (psps[jx].nsnm != NULL) {
 				free(psps[jx].nsnm);
+				psps[jx].nsnm = NULL;
 			}
 		}
 
 		if (smp != NULL && smp->nsnm != NULL) {
 			free(smp->nsnm);
+			smp->nsnm = NULL;
 		}
 
 		for (uint32_t jx= 0; jx < n_ssps; jx++) {
 			if (ssps[jx].nsnm != NULL) {
 				free(ssps[jx].nsnm);
+				ssps[jx].nsnm = NULL;
 			}
 		}
 
@@ -1663,22 +1706,26 @@ analyze_backup_candidate(as_segment_t* segments, uint32_t n_segments,
 
 	if (ptp != NULL && ptp->nsnm != NULL) {
 		free(ptp->nsnm);
+		ptp->nsnm = NULL;
 	}
 
-	for (uint32_t jx= 0; jx < n_psps; jx++) {
+	for (uint32_t jx = 0; jx < n_psps; jx++) {
 		if (psps[jx].nsnm != NULL) {
 			free(psps[jx].nsnm);
+			psps[jx].nsnm = NULL;
 		}
 	}
 
 	if (n_ssps > 0) {
 		if (smp != NULL && smp->nsnm != NULL) {
 			free(smp->nsnm);
+			smp->nsnm = NULL;
 		}
 
-		for (uint32_t jx= 0; jx < n_ssps; jx++) {
+		for (uint32_t jx = 0; jx < n_ssps; jx++) {
 			if (ssps[jx].nsnm != NULL) {
 				free(ssps[jx].nsnm);
+				ssps[jx].nsnm = NULL;
 			}
 		}
 	}
@@ -1861,6 +1908,7 @@ analyze_backup_sanity(as_segment_t* pbp, as_segment_t* ptp,
 		if (g_verbose) {
 			printf("Base segment %08x is too small.\n", pbp->key);
 		}
+
 		return false;
 	}
 
@@ -2397,6 +2445,7 @@ start_io(as_io_t ios[], uint32_t n_ios)
 
 			printf("Total I/O time was %s.\n", time_str);
 			free(time_str);
+			time_str = NULL;
 		}
 	}
 
@@ -2500,6 +2549,7 @@ run_io(void* args)
 						}
 
 						free(time_str);
+						time_str = NULL;
 					}
 				}
 			}
@@ -2589,6 +2639,7 @@ zwrite_file(int fd, const void* buf, size_t segsz, mode_t mode,
 		}
 
 		free(cmp_buf);
+		cmp_buf = NULL;
 		return false;
 	}
 
@@ -2614,6 +2665,7 @@ zwrite_file(int fd, const void* buf, size_t segsz, mode_t mode,
 			}
 
 			free(cmp_buf);
+			cmp_buf = NULL;
 			return false;
 		}
 
@@ -2628,6 +2680,7 @@ zwrite_file(int fd, const void* buf, size_t segsz, mode_t mode,
 
 			(void)deflateEnd(&defstream);
 			free(cmp_buf);
+			cmp_buf = NULL;
 			return false;
 		}
 	} while (defstream.avail_out == 0);
@@ -2641,6 +2694,7 @@ zwrite_file(int fd, const void* buf, size_t segsz, mode_t mode,
 
 		(void)deflateEnd(&defstream);
 		free(cmp_buf);
+		cmp_buf = NULL;
 		return false;
 	}
 
@@ -2651,6 +2705,7 @@ zwrite_file(int fd, const void* buf, size_t segsz, mode_t mode,
 	// Free intermediate compression buffer.
 
 	free(cmp_buf);
+	cmp_buf = NULL;
 
 	// Ensure compression engine finished happily.
 
@@ -2920,6 +2975,7 @@ zread_file(int fd, void* buf, size_t filsz, size_t segsz, int shmid,
 
 			(void)inflateEnd(&infstream);
 			free(cmp_buf);
+			cmp_buf = NULL;
 			return false;
 		}
 
@@ -3002,6 +3058,7 @@ zread_file(int fd, void* buf, size_t filsz, size_t segsz, int shmid,
 
 				(void)inflateEnd(&infstream);
 				free(cmp_buf);
+				cmp_buf = NULL;
 				return false;
 			}
 
@@ -3012,6 +3069,7 @@ zread_file(int fd, void* buf, size_t filsz, size_t segsz, int shmid,
 	(void)inflateEnd(&infstream);
 
 	free(cmp_buf);
+	cmp_buf = NULL;
 
 	// Retrieve crc32, if requested.
 
@@ -3155,11 +3213,13 @@ analyze_restore(void)
 
 				if (fp->type == TYPE_BASE && fp->nsnm != NULL) {
 					free(fp->nsnm);
+					fp->nsnm = NULL;
 				}
 			}
 
 			if (files != NULL) {
 				free(files);
+				files = NULL;
 			}
 		}
 
@@ -3186,11 +3246,13 @@ analyze_restore(void)
 
 					if (fp->type == TYPE_BASE && fp->nsnm != NULL) {
 						free(fp->nsnm);
+						fp->nsnm = NULL;
 					}
 				}
 
 				if (files != NULL) {
 					free(files);
+					files = NULL;
 				}
 
 				return false;
@@ -3220,11 +3282,13 @@ analyze_restore(void)
 
 		if (fp->type == TYPE_BASE && fp->nsnm != NULL) {
 			free(fp->nsnm);
+			fp->nsnm = NULL;
 		}
 	}
 
 	if (files != NULL) {
 		free(files);
+		files = NULL;
 	}
 
 	return true;
@@ -3299,6 +3363,7 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 
 		if (ptp != NULL && ptp->nsnm != NULL) {
 			free(ptp->nsnm);
+			ptp->nsnm = NULL;
 		}
 
 		return false;
@@ -3334,11 +3399,13 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 
 			if (ptp != NULL && ptp->nsnm != NULL) {
 				free(ptp->nsnm);
+				ptp->nsnm = NULL;
 			}
 
 			for (uint32_t jx = 0; jx < n_psps; jx++) {
 				if (psps[jx].nsnm != NULL) {
 					free(psps[jx].nsnm);
+					psps[jx].nsnm = NULL;
 				}
 			}
 
@@ -3369,11 +3436,13 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 
 		if (ptp != NULL && ptp->nsnm != NULL) {
 			free(ptp->nsnm);
+			ptp->nsnm = NULL;
 		}
 
 		for (uint32_t jx= 0; jx < n_psps; jx++) {
 			if (psps[jx].nsnm != NULL) {
 				free(psps[jx].nsnm);
+				psps[jx].nsnm = NULL;
 			}
 		}
 
@@ -3410,16 +3479,19 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 
 			if (ptp != NULL && ptp->nsnm != NULL) {
 				free(ptp->nsnm);
+				ptp->nsnm = NULL;
 			}
 
 			for (uint32_t jx= 0; jx < n_psps; jx++) {
 				if (psps[jx].nsnm != NULL) {
 					free(psps[jx].nsnm);
+					psps[jx].nsnm = NULL;
 				}
 			}
 
 			if (smp != NULL && smp->nsnm != NULL) {
 				free(smp->nsnm);
+				smp->nsnm = NULL;
 			}
 
 			return false;
@@ -3455,21 +3527,25 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 
 				if (ptp != NULL && ptp->nsnm != NULL) {
 					free(ptp->nsnm);
+					ptp->nsnm = NULL;
 				}
 
 				for (uint32_t jx= 0; jx < n_psps; jx++) {
 					if (psps[jx].nsnm != NULL) {
 						free(psps[jx].nsnm);
+						psps[jx].nsnm = NULL;
 					}
 				}
 
 				if (smp != NULL && smp->nsnm != NULL) {
 					free(smp->nsnm);
+					smp->nsnm = NULL;
 				}
 
 				for (uint32_t jx = 0; jx < n_ssps; jx++) {
 					if (ssps[jx].nsnm != NULL) {
 						free(ssps[jx].nsnm);
+						ssps[jx].nsnm = NULL;
 					}
 				}
 
@@ -3497,21 +3573,25 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 
 		if (ptp != NULL && ptp->nsnm != NULL) {
 			free(ptp->nsnm);
+			ptp->nsnm = NULL;
 		}
 
 		for (uint32_t jx= 0; jx < n_psps; jx++) {
 			if (psps[jx].nsnm != NULL) {
 				free(psps[jx].nsnm);
+				psps[jx].nsnm = NULL;
 			}
 		}
 
 		if (smp != NULL && smp->nsnm != NULL) {
 			free(smp->nsnm);
+			smp->nsnm = NULL;
 		}
 
 		for (uint32_t jx = 0; jx < n_ssps; jx++) {
 			if (ssps[jx].nsnm != NULL) {
 				free(ssps[jx].nsnm);
+				ssps[jx].nsnm = NULL;
 			}
 		}
 
@@ -3538,21 +3618,25 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 
 		if (ptp != NULL && ptp->nsnm != NULL) {
 			free(ptp->nsnm);
+			ptp->nsnm = NULL;
 		}
 
 		for (uint32_t jx= 0; jx < n_psps; jx++) {
 			if (psps[jx].nsnm != NULL) {
 				free(psps[jx].nsnm);
+				psps[jx].nsnm = NULL;
 			}
 		}
 
 		if (smp != NULL && smp->nsnm != NULL) {
 			free(smp->nsnm);
+			smp->nsnm = NULL;
 		}
 
 		for (uint32_t jx = 0; jx < n_ssps; jx++) {
 			if (ssps[jx].nsnm != NULL) {
 				free(ssps[jx].nsnm);
+				ssps[jx].nsnm = NULL;
 			}
 		}
 
@@ -3566,21 +3650,25 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 
 		if (ptp != NULL && ptp->nsnm != NULL) {
 			free(ptp->nsnm);
+			ptp->nsnm = NULL;
 		}
 
 		for (uint32_t jx= 0; jx < n_psps; jx++) {
 			if (psps[jx].nsnm != NULL) {
 				free(psps[jx].nsnm);
+				psps[jx].nsnm = NULL;
 			}
 		}
 
 		if (smp != NULL && smp->nsnm != NULL) {
 			free(smp->nsnm);
+			smp->nsnm = NULL;
 		}
 
 		for (uint32_t jx = 0; jx < n_ssps; jx++) {
 			if (ssps[jx].nsnm != NULL) {
 				free(ssps[jx].nsnm);
+				ssps[jx].nsnm = NULL;
 			}
 		}
 
@@ -4241,6 +4329,7 @@ validate_file_name(const char* pathname, as_file_t* file)
 
 	if (dot_ptr == NULL) {
 		free(old_ptr);
+		old_ptr = NULL;
 		return false;
 	}
 
@@ -4249,6 +4338,7 @@ validate_file_name(const char* pathname, as_file_t* file)
 	if ((strcmp(dot_ptr, FILE_EXTENSION) != 0)
 			&& (strcmp(dot_ptr, FILE_EXTENSION_CMP) != 0)) {
 		free(old_ptr);
+		old_ptr = NULL;
 		return false;
 	}
 
@@ -4262,6 +4352,7 @@ validate_file_name(const char* pathname, as_file_t* file)
 
 	if (len != 8) {
 		free(old_ptr);
+		old_ptr = NULL;
 		return false;
 	}
 
@@ -4290,6 +4381,7 @@ validate_file_name(const char* pathname, as_file_t* file)
 			}
 
 			free(old_ptr);
+			old_ptr = NULL;
 			return false;
 		}
 	}
@@ -4313,6 +4405,7 @@ validate_file_name(const char* pathname, as_file_t* file)
 	if (!primary && !secondary) {
 		// Not an Aerospike database file.
 		free(old_ptr);
+		old_ptr = NULL;
 		return false;
 	}
 
@@ -4321,6 +4414,7 @@ validate_file_name(const char* pathname, as_file_t* file)
 	if (file->inst > MAX_INST) {
 		// Note: Instance can be zero.
 		free(old_ptr);
+		old_ptr = NULL;
 		return false;
 	}
 
@@ -4333,6 +4427,7 @@ validate_file_name(const char* pathname, as_file_t* file)
 	if (file->nsid < MIN_NSID || file->nsid > MAX_NSID) {
 		// Invalid nsid.
 		free(old_ptr);
+		old_ptr = NULL;
 		return false;
 	}
 
@@ -4352,6 +4447,7 @@ validate_file_name(const char* pathname, as_file_t* file)
 	else {
 		// Not a valid Aerospike file type.
 		free(old_ptr);
+		old_ptr = NULL;
 		return false;
 	}
 
@@ -4365,12 +4461,14 @@ validate_file_name(const char* pathname, as_file_t* file)
 			&& (file->stage < MIN_ARENA || file->stage > MAX_ARENA)) {
 		// Not a valid stage.
 		free(old_ptr);
+		old_ptr = NULL;
 		return false;
 	}
 
 	// Done.
 
 	free(old_ptr);
+	old_ptr = NULL;
 
 	return true;
 }
@@ -4486,6 +4584,7 @@ list_files(as_file_t** files, uint32_t* n_files, int* error)
 
 			if (strcmp(valid_file.nsnm, g_nsnm) != 0) {
 				free(valid_file.nsnm);
+				valid_file.nsnm = NULL;
 				continue;
 			}
 		}
@@ -4634,6 +4733,7 @@ draw_table(char** table, uint32_t n_rows, uint32_t n_cols)
 
 		printf("%s", field);
 		free(field);
+		field = NULL;
 	}
 
 	printf("\n");
@@ -4644,6 +4744,7 @@ draw_table(char** table, uint32_t n_rows, uint32_t n_cols)
 
 		printf("%s", field);
 		free(field);
+		field = NULL;
 	}
 
 	printf("\n");
@@ -4657,6 +4758,7 @@ draw_table(char** table, uint32_t n_rows, uint32_t n_cols)
 
 			printf("%s", field);
 			free(field);
+			field = NULL;
 		}
 
 		printf("\n");
@@ -4667,6 +4769,7 @@ draw_table(char** table, uint32_t n_rows, uint32_t n_cols)
 	for (uint32_t i = 0; i < n_rows; i++) {
 		for (uint32_t j = 0; j < n_cols; j++) {
 			free((void*)*(table + i * n_cols + j));
+			*(table + i * n_cols + j) = NULL;
 		}
 	}
 }
