@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        container: [ 'debian:10', 'debian:11', 'debian-12' ]
+        container: [ 'debian:10', 'debian:11', 'debian:12' ]
     container:
       image: ${{ matrix.container }}
       options: "--entrypoint /bin/bash"
