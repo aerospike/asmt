@@ -1,7 +1,7 @@
 # Aerospike Shared Memory Tool (ASMT)
 
 ASMT provides a program for backing up and restoring the primary and secondary indexes
-of an Aerospike Database Enterprise Edition (EE).
+as well as the data stages (if any) of an Aerospike Database Enterprise Edition (EE).
 
 * [Overview](#overview)
   * [What Does ASMT Do?](#what-does-asmt-do)
@@ -23,7 +23,8 @@ of an Aerospike Database Enterprise Edition (EE).
 ## Overview
 
 After an Aerospike Database server node has been shut down cleanly, ASMT may
-be used to save the server node's primary and secondary indexes from shared memory to files in
+be used to save the server node's primary and secondary indexes and the data stages
+from shared memory to files in
 the file system. The server node (host machine) may then be rebooted, after
 which ASMT can be used to restore the index from the file system to shared
 memory. This in turn enables the Aerospike Database server to
@@ -35,13 +36,13 @@ even though it was rebooted.
 ### What Does ASMT Do?
 
 With ASMT, shared memory segments corresponding
-to an Aerospike Database primary and secondary indexes are backed up (copied from shared
+to an Aerospike Database primary and secondary indexes and data stages are backed up (copied from shared
 memory to files in the file system) and restored (copied from files in the file
 system to shared memory).
 
-Once the primary and secondary indexes have been copied to shared memory by ASMT,
+Once the primary and secondary indexes and data stages have been copied to shared memory by ASMT,
 the Aerospike Database node may be restarted, in which case Aerospike Database
-will find the primary and secondary indexes in shared memory and avoid reconstructing them.
+will find the primary and secondary indexes and data stages in shared memory and avoid reconstructing them.
 Reconstructing the primary and secondary indexes without reading them from shared memory requires
 scanning all of the records in the database, which can be time-consuming
 (a [cold start](https://www.aerospike.com/docs/operations/manage/aerospike/cold_start/index.html)).
@@ -104,7 +105,7 @@ relevant Aerospike Database server node, and change to that directory.
 
 ### Taking a Backup of the Primary and Secondary Indexes
 After checking that the server node is not running, run the asmt binary to
-back up the primary and secondary indexes, for example:
+back up the primary and secondary indexes and data stages, for example:
 
 ```
 $ ./asmt -b -v -p /path/to/index/backup
@@ -115,11 +116,11 @@ where:
 ```
  -b - back up (as opposed to restore - must specify one or the other)
  -v - verbose output (optional but recommended)
- -p <backup path> - mandatory directory path specifying where your index backup
+ -p <backup path> - mandatory directory path specifying where your backup
 files will be saved
 ```
 
-The above example will back up all relevant namespaces' indexes for server
+The above example will back up all relevant namespaces' indexes and data stages for server
 instance 0, the most common usage.
 
 To back up a different server instance, use `-i` to specify the instance index
@@ -149,12 +150,12 @@ Note that if files with the relevant names already exist in the directory,
 the backup will not start, i.e., it will not overwrite existing files.
 
 If the back up was successful, the host machine may then be rebooted. The index
-shared memory blocks are lost, but ASMT will enable the primary and secondary indexes to be
-restored after reboot.
+shared memory blocks are lost, but ASMT will enable the primary and secondary indexes 
+and data stages to be restored after reboot.
 
 ### Restoring the Primary and Secondary Indexes from an ASMT Backup
 After reboot, but before restarting the Aerospike Database server, run the asmt
-binary to restore the primary and secondary indexes, for example:
+binary to restore the primary and secondary indexes and data stages, for example:
 
 ```
 $ ./asmt -r -v -p /path/to/index/backup
@@ -169,7 +170,8 @@ where:
 files have been saved
 ```
 
-This example usage will restore all saved namespaces' indexes for server
+This example usage will restore all saved namespaces'
+primary and secondary indexes and data stages for server
 instance 0.
 
 To restore a different server instance, use `-i` to specify the instance index.
@@ -218,11 +220,11 @@ These options have the following meanings:
 		performing the back up.
 
 `-c`	compute a standard 32-bit cyclic redundancy check (CRC-32) to ensure
-	    that the contents of the primary and secondary index were not corrupted
-		during a back up operation, during a restore operation, or while resident
-		in the file system. Without the `-z` option (see below), computing the
-	    CRC-32 may be computationally expensive. When used with `-z`, the cost
-    	is much lower, and may be considered negligible.
+	    that the contents of the primary and secondary indexes and data stage
+        were not corrupted during a back up operation, during a restore operation,
+        or while resident in the file system. Without the `-z` option (see below),
+        computing the CRC-32 may be computationally expensive. When used with `-z`,
+        the cost is much lower, and may be considered negligible.
 
 `-h`	show information on how to use ASMT.
 
@@ -235,13 +237,14 @@ These options have the following meanings:
 	    comma-separated list, e.g., `-n foo,bar,test`.
 
 `-p`	specify the path to which the Aerospike Database primary and secondary
-		indexes should be backed up, or the path from which the Aerospike Database
-		primary and secondary indexes should be restored, e.g., `-p backup/asd`.
+		indexes and data stages should be backed up, or the path from which the
+        Aerospike Database primary and secondary indexes should be restored, e.g.,
+        `-p backup/asd`.
 
 `-r`	perform a restore operation, to copy Aerospike Database's primary and
-	    secondary indexes from files in the file system to shared memory. May be
-		combined with `-a` to check whether a restore may be performed without
-		performing the restore.
+	    secondary indexes and data stages from files in the file system to shared
+        memory. May be combined with `-a` to check whether a restore may be
+        performed without performing the restore.
 
 `-t`	specify the maximum number of threads to use for performing I/O needed
 	    for a back up or restore operation. Normally, ASMT creates one I/O thread
@@ -251,12 +254,12 @@ These options have the following meanings:
 
 `-v`	specifies whether ASMT should produce verbose output. Recommended.
 
-`-z`	compress primary and secondary indexes on backup. This can result in files
-		that are 15-30% smaller and 15-30% quicker to write, at the cost of a small
-    	amount of computation. There is no need to specify this option when
-	    restoring the primary and secondary indexes that was backed up using this
-		option. (Files compressed by back up are automatically decompressed by
-		restore.)
+`-z`	compress primary and secondary indexes and data stages on backup.
+        This can result in files that are 15-30% smaller and 15-30% quicker to write,
+        at the cost of a small amount of computation. There is no need to specify
+        this option when restoring the primary and secondary indexes and data stages
+        that were backed up using this option. (Files compressed by back up are
+        automatically decompressed by restore.)
 
 **Note:** ASMT must be run with the same user and group that was used to run the
 Aerospike database server. If you ran the Aerospike database server as user
@@ -301,6 +304,7 @@ memory segments:
 ```
 ipcs | grep ^0xae | awk '{print $1}' | xargs -i ipcrm -M {}
 ipcs | grep ^0xa2 | awk '{print $1}' | xargs -i ipcrm -M {}
+ipcs | grep ^0xad | awk '{print $1}' | xargs -i ipcrm -M {}
 ```
 
 ## License
