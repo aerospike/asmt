@@ -117,6 +117,10 @@ main() {
     distro_long="centos${distro_version}"
     distro_short="el${distro_version}"
     ;;
+  'amzn' )
+    distro_long="ami"
+    distro_short="ami"
+    ;;
   * )
     distro_long="${distro_id}${distro_version}"
     distro_short="${distro_id}${distro_version}"
