@@ -1870,7 +1870,7 @@ display_segments(as_segment_t* pbp, as_segment_t* ptp,
 			segment = &psps[i - (4 - (uint32_t)(smp == NULL))];
 		}
 		else if (i <= 3 + n_psps + n_ssps - (uint32_t)(smp == NULL)) {
-			segment = &ssps[i - (3 + n_psps + n_ssps - (uint32_t)(smp == NULL))];
+			segment = &ssps[i - (4 + n_psps - (uint32_t)(smp == NULL))];
 		}
 		else {
 			segment = &data[i - (4 + n_psps + n_ssps - (uint32_t)(smp == NULL))];
