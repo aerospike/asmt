@@ -994,6 +994,33 @@ analyze_backup(void)
 		}
 	}
 
+
+	if (!candidates) {
+	    // look for orphaned data segments
+	    // note lack of instance filter or namespace id filter
+
+	    as_segment_t data[MAX_DATA_STAGES] = { 0 };
+	    uint32_t n_data = 0;
+
+	    for (int ii = 0; ii < n_segments; ii++) {
+
+		if (segments[ii].type != TYPE_DAT_STAGE)  {
+		    continue;
+		}
+
+		data[n_data++] = segments[ii];
+	    }
+
+	    if (n_data) {
+		qsort((void*)data, (size_t)n_data, sizeof(as_segment_t),
+				qsort_compare_segments);
+		if (!g_analyze) {
+		    bool success = backup_candidate (NULL, NULL, NULL, 0, NULL, NULL, 0, data, n_data);
+		}
+		candidates = true;
+	    }
+	}
+
 	if (!candidates) {
 		if (g_verbose) {
 			printf("\nDid not find any unattached Aerospike database segments");
@@ -1356,7 +1383,7 @@ stat_segment(int shmid, as_segment_t** segment, int* error)
 
 			if (sp->nsnm != NULL) {
 				free(sp->nsnm);
-			
+
 			sp->nsnm = NULL;
 			}
 
@@ -2155,7 +2182,7 @@ backup_candidate(as_segment_t* pbp, as_segment_t* ptp,
 	// Create list of file I/O requests.
 	// Note: Assumes that ulimit (number of open files) is big enough.
 
-	uint32_t n_files = 1 + 1 + n_psps;
+	uint32_t n_files = n_psps + !!pbp + !!ptp;
 
 	if (n_ssps > 0) {
 		n_files += 1 + n_ssps;
@@ -2168,14 +2195,18 @@ backup_candidate(as_segment_t* pbp, as_segment_t* ptp,
 	as_io_t ios[n_files];
 	uint32_t n_ios = 0;
 
-	if (!backup_candidate_file(pbp, &ios[n_ios++], ios, pbp, ptp, psps, n_psps,
-			smp, ssps, n_ssps, data, n_data)) {
+	if (pbp) {
+	    if (!backup_candidate_file(pbp, &ios[n_ios++], ios, pbp, ptp, psps, n_psps,
+				       smp, ssps, n_ssps, data, n_data)) {
 		return false;
+	    }
 	}
 
-	if (!backup_candidate_file(ptp, &ios[n_ios++], ios, pbp, ptp, psps, n_psps,
-			smp, ssps, n_ssps, data, n_data)) {
+	if (ptp) {
+	    if (!backup_candidate_file(ptp, &ios[n_ios++], ios, pbp, ptp, psps, n_psps,
+				       smp, ssps, n_ssps, data, n_data)) {
 		return false;
+	    }
 	}
 
 	for (uint32_t i = 0; i < n_psps; i++) {
@@ -2233,8 +2264,12 @@ backup_candidate(as_segment_t* pbp, as_segment_t* ptp,
 		printf("%s",
 				success ? "\nSuccessfully backed up" : "\nFailed to back up");
 		printf(" %u Aerospike database segments", n_files);
-		printf(" for instance %u, namespace \'%s\' (nsid %u).\n", pbp->inst,
-				pbp->nsnm == NULL ? "<null>" : pbp->nsnm, pbp->nsid);
+		if (pbp) {
+		    printf(" for instance %u, namespace \'%s\' (nsid %u).\n", pbp->inst,
+			   pbp->nsnm == NULL ? "<null>" : pbp->nsnm, pbp->nsid);
+		} else {
+		    printf ("\n");
+		}
 	}
 
 	// Clean up all intermediate operations.
@@ -2400,7 +2435,7 @@ backup_candidate_cleanup(as_io_t ios[], as_segment_t* pbp,
 	(void)data;
 	(void)n_data;
 
-	uint32_t n_objects = 2 + n_psps;
+	uint32_t n_objects = n_psps + !!pbp + !!ptp;
 
 	if (n_ssps > 0) {
 		n_objects += 1 + n_ssps;
@@ -2428,15 +2463,19 @@ backup_candidate_cleanup(as_io_t ios[], as_segment_t* pbp,
 	const char* extension;
 	as_segment_t* sp;
 
-	sp = pbp;
-	extension = FILE_EXTENSION;
-	sprintf(pathname, "%s/%08x%s", g_pathdir, sp->key, extension);
-	unlink(pathname);
+	if (pbp) {
+	    sp = pbp;
+	    extension = FILE_EXTENSION;
+	    sprintf(pathname, "%s/%08x%s", g_pathdir, sp->key, extension);
+	    unlink(pathname);
+	}
 
-	sp = ptp;
-	extension = g_compress ? FILE_EXTENSION_CMP : FILE_EXTENSION;
-	sprintf(pathname, "%s/%08x%s", g_pathdir, sp->key, extension);
-	unlink(pathname);
+	if (ptp) {
+	    sp = ptp;
+	    extension = g_compress ? FILE_EXTENSION_CMP : FILE_EXTENSION;
+	    sprintf(pathname, "%s/%08x%s", g_pathdir, sp->key, extension);
+	    unlink(pathname);
+	}
 
 	for (uint32_t ix = 0; ix < n_psps; ix++) {
 		sp = &psps[ix];
@@ -3365,6 +3404,28 @@ analyze_restore(void)
 	}
 
 	if (!candidates) {
+	    // look for orphaned data segments
+	    // note lack of instance filter or namespace id filter
+	    as_file_t data[MAX_DATA_STAGES] = { 0 };
+	    uint32_t n_data = 0;
+
+	    for (int ii=0; ii < n_files; ii++) {
+		if (files[ii].type != TYPE_DAT_STAGE) {
+		    continue;
+		}
+		data[n_data++] = files[ii];
+	    }
+
+	    if (n_data) {
+		if (!g_analyze) {
+		    bool success = restore_candidate (NULL, NULL, NULL, 0, NULL, NULL, 0, data, n_data);
+		}
+		candidates = true;
+	    }
+	}
+
+
+	if (!candidates) {
 		if (g_verbose) {
 			printf("\nDid not find any Aerospike database segment files");
 			if (g_inst != INV_INST) {
@@ -3749,7 +3810,7 @@ analyze_restore_candidate(as_file_t* files, uint32_t n_files, uint32_t base_ix)
 		}
 
 		if (smp != NULL && smp->nsnm != NULL) {
-		
+
 				free(smp->nsnm);
 			smp->nsnm = NULL;
 		}
@@ -4211,7 +4272,7 @@ restore_candidate(as_file_t* pbp, as_file_t* ptp, as_file_t psps[],
 {
 	// Create list of file I/O requests.
 
-	uint32_t n_files = 1 + 1 + n_psps;
+	uint32_t n_files = n_psps + !!pbp + !!ptp;
 
 	if (n_ssps > 0) {
 		n_files += 1 + n_ssps;
@@ -4224,19 +4285,21 @@ restore_candidate(as_file_t* pbp, as_file_t* ptp, as_file_t psps[],
 	as_io_t ios[n_files];
 	uint32_t n_ios = 0;
 
-	if (!restore_candidate_segment(pbp, &ios[n_ios], ios, n_ios, pbp, ptp, psps, n_psps,
-			smp, ssps, n_ssps, data, n_data)) {
+	if (pbp) {
+	    if (!restore_candidate_segment(pbp, &ios[n_ios], ios, n_ios, pbp, ptp, psps, n_psps,
+					   smp, ssps, n_ssps, data, n_data)) {
 		return false;
+	    }
+	    n_ios++;
 	}
 
-	n_ios++;
-
-	if (!restore_candidate_segment(ptp, &ios[n_ios], ios, n_ios, pbp, ptp, psps, n_psps,
-			smp, ssps, n_ssps, data, n_data)) {
+	if (ptp) {
+	    if (!restore_candidate_segment(ptp, &ios[n_ios], ios, n_ios, pbp, ptp, psps, n_psps,
+					   smp, ssps, n_ssps, data, n_data)) {
 		return false;
+	    }
+	    n_ios++;
 	}
-
-	n_ios++;
 
 	for (uint32_t i = 0; i < n_psps; i++) {
 		if (!restore_candidate_segment(&psps[i], &ios[n_ios], ios, n_ios, pbp, ptp, psps,
@@ -4304,8 +4367,12 @@ restore_candidate(as_file_t* pbp, as_file_t* ptp, as_file_t psps[],
 					success ?
 							"\nSuccessfully restored" : "\nFailed to restore");
 			printf(" %u Aerospike database segment files",n_files);
-			printf(" for instance %u, namespace \'%s\' (nsid %u).\n", fp->inst,
+			if (pbp) {
+			    printf(" for instance %u, namespace \'%s\' (nsid %u).\n", fp->inst,
 					fp->nsnm == NULL ? "<null>" : fp->nsnm, fp->nsid);
+			} else {
+			    printf ("\n");
+			}
 		}
 	}
 
