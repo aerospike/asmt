@@ -764,7 +764,7 @@ usage(bool verbose)
 	printf("-c compare crc32 values of segments and segment files\n");
 	printf("-h help\n");
 	printf("-i filter by instance (default is instance 0)\n");
-	printf("-n filter by namespace name");
+	printf("-n filter by namespace name\n");
 	printf("-p path of directory (mandatory)\n");
 	printf("-r restore (operation or advisory with '-a')\n");
 	printf("-t maximum number of threads for I/O (default is #CPUs,"
