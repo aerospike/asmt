@@ -108,7 +108,7 @@ After checking that the server node is not running, run the asmt binary to
 back up the primary and secondary indexes and data stages, for example:
 
 ```
-$ ./asmt -b -v -p /path/to/index/backup
+$ ./asmt -b -v -p /path/to/index/backup -n test
 ```
 
 where:
@@ -118,15 +118,16 @@ where:
  -v - verbose output (optional but recommended)
  -p <backup path> - mandatory directory path specifying where your backup
 files will be saved
+ -n <namespace> - mandatory namespace name (or comma-separated list)
 ```
 
 The above example will back up all relevant namespaces' indexes and data stages for server
-instance 0, the most common usage.
+instance 0, the most common usage, namespace test.
 
 To back up a different server instance, use `-i` to specify the instance index
 (see below).
 
-To back up a specific namespace only, use `-n` to specify the namespace name
+To back up a specific namespace, use `-n` to specify the namespace name
 (see below). **Note:** A comma-separated list of namespace names may be supplied,
 e.g., `-n foo,bar,test`.
 
@@ -158,7 +159,7 @@ After reboot, but before restarting the Aerospike Database server, run the asmt
 binary to restore the primary and secondary indexes and data stages, for example:
 
 ```
-$ ./asmt -r -v -p /path/to/index/backup
+$ ./asmt -r -v -p /path/to/index/backup -n test
 ```
 
 where:
@@ -168,15 +169,16 @@ where:
  -v - verbose output (optional but recommended)
  -p <backup path> - mandatory directory path specifying where your index backup
 files have been saved
+ -n <namespace> - mandatory namespace name (or list of namespace names)
 ```
 
-This example usage will restore all saved namespaces'
+This example usage will restore namespaces test's
 primary and secondary indexes and data stages for server
 instance 0.
 
 To restore a different server instance, use `-i` to specify the instance index.
 
-To restore a specific namespace only, use `-n` to specify the namespace name.
+To restore a specific namespace, use `-n` to specify the namespace name.
 (**Note:** A comma-separated list of namespace names may be supplied, e.g.,
 `-n foo,bar,test`.)
 
@@ -193,7 +195,7 @@ can facilitate this.
 ### ASMT Options
 
 ```
-usage: asmt [-a] [-b] [-c] [-h] [-i <instance>] [-n <name>[,<name>...]]
+usage: asmt [-a] [-b] [-c] [-h] [-i <instance>] -n <name>[,<name>...]
             -p <pathdir> [-r] [-t <threads>] [-v] [-z]
 
 -a analyze (advisory - goes with '-b' or '-r')
@@ -201,7 +203,7 @@ usage: asmt [-a] [-b] [-c] [-h] [-i <instance>] [-n <name>[,<name>...]]
 -c compare crc32 values of segments and segment files
 -h help
 -i filter by instance (default is instance 0)
--n filter by namespace name (default is all namespaces)
+-n filter by namespace name
 -p path of directory (mandatory)
 -r restore (operation or advisory with '-a')
 -t maximum number of threads for I/O
@@ -232,9 +234,8 @@ These options have the following meanings:
 	    default instance is 0.
 
 `-n`	select a particular Aerospike Database namespace, e.g., `-n foo`.
-	    If no value is specified, all namespaces for the given instance are
-	    backed up or restored. Multiple namespaces may be specified as a
-	    comma-separated list, e.g., `-n foo,bar,test`.
+		Multiple namespaces may be specified as a comma-separated list,
+		e.g., `-n foo,bar,test`.
 
 `-p`	specify the path to which the Aerospike Database primary and secondary
 		indexes and data stages should be backed up, or the path from which the
