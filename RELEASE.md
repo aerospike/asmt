@@ -4,4 +4,5 @@
 * [TOOLS-2835] - (ASMT) Ensure that ASMT can back up shared memory data segments (stripes) after a crash.
 
 ## Fixes
-* [TOOLS-2886] - (ASMT) Corrects array subscript in display routine.
+* [TOOLS-2886] - (ASMT) Corrects array subscript in display routine (for backup).
+* [TOOLS-2940] - (ASMT) Corrects array subscript in display routine (for restore).
