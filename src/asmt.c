@@ -156,7 +156,7 @@ typedef struct as_cmp_s {
 // Constant globals.
 
 static const char g_fullname[] = "Aerospike Shared Memory Tool";
-static const char g_version[] = "Version 2.1.0";
+static const char g_version[] = "Version 2.1.1";
 static const char g_copyright[] = "Copyright (C) 2022-2024 Aerospike, Inc.";
 static const char g_all_rights[] = "All rights reserved.";
 
@@ -4404,7 +4404,7 @@ display_files(as_file_t* pbfp, as_file_t* ptfp, as_file_t psfps[], uint32_t n_ps
 			fp = &psfps[i - (4 - (uint32_t)(smfp == NULL))];
 		}
 		else if (i <= 3 + n_psfps + n_ssfps - (uint32_t)(smfp == NULL)) {
-			fp = &ssfps[i - (3 + n_psfps + n_ssfps - (uint32_t)(smfp == NULL))];
+			fp = &ssfps[i - (4 + n_psfps - (uint32_t)(smfp == NULL))];
 		}
 		else {
 			fp = &dfps[i - (4 + n_psfps + n_ssfps - (uint32_t)(smfp == NULL))];
