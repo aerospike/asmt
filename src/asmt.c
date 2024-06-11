@@ -156,7 +156,7 @@ typedef struct as_cmp_s {
 // Constant globals.
 
 static const char g_fullname[] = "Aerospike Shared Memory Tool";
-static const char g_version[] = "Version 2.1.1";
+static const char g_version[] = "Version 2.1.2";
 static const char g_copyright[] = "Copyright (C) 2022-2024 Aerospike, Inc.";
 static const char g_all_rights[] = "All rights reserved.";
 
@@ -2691,10 +2691,6 @@ backup_candidate(as_segment_t* pbsp, as_segment_t* ptsp,
 	if (success && g_crc32) {
 		if (!backup_candidate_check_crc32(ios, pbsp, ptsp, pssps, n_pssps, smsp,
 				sssps, n_sssps, dsps, n_dsps)) {
-			if (g_verbose) {
-				printf("crc32 mismatch.\n\n");
-			}
-
 			success = false;
 		}
 	}
@@ -2830,26 +2826,46 @@ backup_candidate_check_crc32(as_io_t ios[], as_segment_t* pbsp,
 		as_segment_t dsps[], uint32_t n_dsps)
 {
 	if (pbsp && pbsp->crc32 != ios[0].crc32) {
+		if (g_verbose) {
+			printf("crc32-check failed for base segment.\n");
+		}
+
 		return false;
 	}
 
 	if (ptsp && ptsp->crc32 != ios[1].crc32) {
+		if (g_verbose) {
+			printf("crc32-check failed for tree-x segment.\n");
+		}
+
 		return false;
 	}
 
 	for (uint32_t ix = 0; ix < n_pssps; ix++) {
 		if (pssps[ix].crc32 != ios[2 + ix].crc32) {
+			if (g_verbose) {
+				printf("crc32-check failed for primary stage segment.\n");
+			}
+
 			return false;
 		}
 	}
 
 	if (n_sssps > 0) {
 		if (smsp && smsp->crc32 != ios[2 + n_pssps].crc32) {
+			if (g_verbose) {
+				printf("crc32-check failed for secondary meta segment.\n");
+			}
+
 			return false;
 		}
 
 		for (uint32_t ix = 0; ix < n_sssps; ix++) {
 			if (sssps[ix].crc32 != ios[2 + n_pssps + 1 + ix].crc32) {
+				if (g_verbose) {
+					printf("crc32-check failed for secondary stage segment.\n");
+				}
+
 				return false;
 			}
 		}
@@ -2858,13 +2874,21 @@ backup_candidate_check_crc32(as_io_t ios[], as_segment_t* pbsp,
 	if (!pbsp) {
 		for (uint32_t ix = 0; ix < n_dsps; ix++) {
 			if (dsps[ix].crc32 != ios[ix].crc32) {
+				if (g_verbose) {
+					printf("crc32-check failed for data stage segment.\n");
+				}
+
 				return false;
 			}
 		}
 	}
 	else {
 		for (uint32_t ix = 0; ix < n_dsps; ix++) {
-			if (dsps[ix].crc32 != ios[2 + n_pssps + ix].crc32) {
+			if (dsps[ix].crc32 != ios[2 + n_pssps + n_sssps + !!smsp + ix].crc32) {
+				if (g_verbose) {
+					printf("crc32-check failed for data stage segment.\n");
+				}
+
 				return false;
 			}
 		}
@@ -3379,9 +3403,9 @@ pwrite_file(int fd, const void* buf, size_t segsz, mode_t mode,
 
 	ssize_t newsize = (ssize_t)segsz;
 
-	// result is result of individual pwrite(2) operation.
+	// bytes_written is result of individual pwrite(2) operation.
 
-	ssize_t result;
+	ssize_t bytes_written;
 
 	// Initially, offset is start of segment / segment file.
 
@@ -3389,28 +3413,39 @@ pwrite_file(int fd, const void* buf, size_t segsz, mode_t mode,
 
 	// Write chunks of segment, as large as possible.
 
-	while ((result = pwrite(fd, buf, (size_t)newsize, offset)) != newsize) {
-		if (result <= 0) {
+	while ((bytes_written = pwrite(fd, buf, (size_t)newsize, offset)) != newsize) {
+		if (bytes_written == 0) {
+			continue;
+		}
+		else if (bytes_written < 0) {
+			char errbuff[MAX_BUFFER];
+			char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
+
+			if (g_verbose) {
+				printf("Unable to pwrite(2) file"
+						": error was %d: %s\n", errno, errout);
+			}
+
 			return false;
 		}
 
 		// Should we compute crc32? If so, apply to this chunk.
 
 		if (g_crc32) {
-			*crc = crc32(*crc, buf, (uInt)result);
+			*crc = crc32(*crc, buf, (uInt)bytes_written);
 		}
 
 		// If only partial write, set up next chunk.
 
-		buf += result;
-		offset += result;
-		newsize -= result;
+		buf += bytes_written;
+		offset += bytes_written;
+		newsize -= bytes_written;
 	}
 
 	// Finish crc32 computation on last chunk, if incomplete.
 
-	if (result >= 0 && g_crc32) {
-		*crc = crc32(*crc, buf, (uInt)result);
+	if (bytes_written >= 0 && g_crc32) {
+		*crc = crc32(*crc, buf, (uInt)bytes_written);
 	}
 
 	// Set file ownership.
@@ -3699,7 +3734,7 @@ pread_file(int fd, void* buf, size_t segsz, int shmid, mode_t mode,
 
 	ssize_t newsize = (ssize_t)segsz;
 
-	// result is result of individual pread(2) operation.
+	// bytes_read is result of individual pread(2) operation.
 
 	ssize_t bytes_read;
 
@@ -3708,7 +3743,18 @@ pread_file(int fd, void* buf, size_t segsz, int shmid, mode_t mode,
 	off_t offset = 0;
 
 	while ((bytes_read = pread(fd, buf, (size_t)newsize, offset)) != newsize) {
-		if (bytes_read <= 0) {
+		if (bytes_read == 0) {
+			continue;
+		}
+		else if (bytes_read < 0) {
+			char errbuff[MAX_BUFFER];
+			char* errout = strerror_r(errno, errbuff, MAX_BUFFER);
+
+			if (g_verbose) {
+				printf("Unable to pread(2) file"
+						": error was %d: %s\n", errno, errout);
+			}
+
 			return false;
 		}
 
@@ -4837,10 +4883,6 @@ restore_candidate(as_file_t* pbfp, as_file_t* ptfp, as_file_t psfps[],
 
 	if (success && g_crc32) {
 		if (!restore_candidate_check_crc32(ios, n_ios)) {
-			if (g_verbose) {
-				printf("crc32 mismatch.\n\n");
-			}
-
 			success = false;
 		}
 	}
@@ -5005,6 +5047,10 @@ restore_candidate_check_crc32(as_io_t ios[], uint32_t n_ios)
 		// while reading the file.
 
 		if (segment_crc32 != io->crc32) {
+			if (g_verbose) {
+				printf("crc32-check failed for restored segment.\n");
+			}
+
 			return false;
 		}
 	}
