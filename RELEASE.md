@@ -3,3 +3,4 @@
 ## Fixes
 * [TOOLS-2886] - (ASMT) Corrects array subscript in display routine (for backup).
 * [TOOLS-2940] - (ASMT) Corrects array subscript in display routine (for restore).
+* [OPS-7473] Fixed error where pread(2) or pwrite(2) returns 0. Also instrumented errors.
