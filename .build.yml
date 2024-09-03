@@ -14,10 +14,10 @@ container:
       - docker.qe.aerospike.com/build/aerospike-tools-alt:ubuntu-22.04
 
       # - docker.qe.aerospike.com/build/aerospike-tools-alt:arm-debian-9
-      - docker.qe.aerospike.com/build/aerospike-tools-alt:arm-debian-10
-      - docker.qe.aerospike.com/build/aerospike-tools-alt:arm-ubuntu-18.04
-      - docker.qe.aerospike.com/build/aerospike-tools-alt:arm-rhel-8
-      - docker.qe.aerospike.com/build/aerospike-tools-alt:arm-ubuntu-20.04
+      # - docker.qe.aerospike.com/build/aerospike-tools-alt:arm-debian-10
+      # - docker.qe.aerospike.com/build/aerospike-tools-alt:arm-ubuntu-18.04
+      # - docker.qe.aerospike.com/build/aerospike-tools-alt:arm-rhel-8
+      # - docker.qe.aerospike.com/build/aerospike-tools-alt:arm-ubuntu-20.04
 # dependency:
 #   - url: git@github.com:citrusleaf/aerospike-client-c
 #     dir: client
@@ -30,7 +30,7 @@ build:
     artifact:
       - target/bin/*
     environment:
-      BUILD_TRIGGER: 1
+      BUILD_TRIGGER: 2
 
 qe-registry:
   - dockerfile: files/Dockerfile
