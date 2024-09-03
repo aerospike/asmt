@@ -29,6 +29,8 @@ build:
       - make
     artifact:
       - target/bin/*
+    environment:
+      BUILD_TRIGGER: 1
 
 qe-registry:
   - dockerfile: files/Dockerfile
