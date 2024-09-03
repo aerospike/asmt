@@ -30,7 +30,7 @@ build:
     artifact:
       - target/bin/*
     environment:
-      BUILD_TRIGGER: 2
+      BUILD_TRIGGER: 3
 
 qe-registry:
   - dockerfile: files/Dockerfile
