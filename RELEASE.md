@@ -1,4 +1,4 @@
 [Aerospike Shared-Memory Tool (ASMT)](https://docs.aerospike.com/tools/asmt) supports faster cold starts of nodes in an Aerospike Database Enterprise Edition (EE) cluster. See the new docs for more information.
 
 ## Fixes
-* [OPS-7473] Fixed error where pread(2) or pwrite(2) returns 0. Also instrumented errors.
+* Corrected version returned for Aerospike Shared Memory Tool. 
