@@ -21,7 +21,7 @@ default: dist
 	sed -i 's/@RELEASE@/'$(OS)'/g' pkg/asmt_v.spec
 	sed -i 's/@ARCH@/'$(ARCH)'/g' pkg/asmt_v.spec
 
-	rpmbuild -bb -vv --define "dist .$(OS)" --buildroot $(RPM_BUILD_ROOT) pkg/asmt_v.spec
+	rpmbuild --noclean -bb -vv --define "dist .$(OS)" --buildroot $(RPM_BUILD_ROOT) pkg/asmt_v.spec
 	find $(RPM_SOURCE_ROOT)/RPMS -type f -exec mv {} target/packages \;
 	rm -rf pkg/asmt_v.spec dist
 
