@@ -51,7 +51,7 @@ scanning all of the records in the database, which can be time-consuming
 
 You can use a compiled binary associated with one of the
 [releases](https://github.com/aerospike/asmt/releases). The `asmt` binary is
-statically built on CentOS 7, and should work for most x86-64 Linux distros.
+statically built on RHEL 9, and should work for most x86-64 Linux distros.
 
 Alternatively you can compile `asmt` yourself.
 
