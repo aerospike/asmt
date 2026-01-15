@@ -1,7 +1,7 @@
 /*
  * asmt.c
  *
- * Copyright (C) 2022-2024 Aerospike, Inc.
+ * Copyright (C) 2022-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -157,7 +157,7 @@ typedef struct as_cmp_s {
 
 static const char g_fullname[] = "Aerospike Shared Memory Tool";
 static const char g_version[] = "Version 2.2.0";
-static const char g_copyright[] = "Copyright (C) 2022-2024 Aerospike, Inc.";
+static const char g_copyright[] = "Copyright (C) 2022-2026 Aerospike, Inc.";
 static const char g_all_rights[] = "All rights reserved.";
 
 static const char* FILE_EXTENSION = ".dat";
