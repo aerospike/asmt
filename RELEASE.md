@@ -2,5 +2,5 @@
 
 ## Improvements
 * [TOOLS-3018] - (ASMT) Add support for Debian 13.
-* [TOOLS-3128] - (ASMT) Add support for Rhel 10.
+* [TOOLS-3128] - (ASMT) Add support for RHEL 10.
 * [TOOLS-3135] - (ASMT) Remove support for Debian 11.
