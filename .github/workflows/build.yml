@@ -15,6 +15,11 @@ jobs:
 
     steps:
 
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+      with:
+        egress-policy: audit
+
     - name: Install Dependencies (centos:7)
       run: |
         sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-* && sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
@@ -64,7 +69,7 @@ jobs:
         make all deb      
 
     - name: Upload Artifacts
-      uses: actions/upload-artifact@v3.1.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
         path: /__w/asmt/asmt/asmt/target/packages/asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
@@ -77,12 +82,17 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
 
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+      with:
+        egress-policy: audit
+
     - name: Install Dependencies
       run: sudo apt-get install make gcc libc6-dev zlib1g-dev
       if: matrix.os == 'ubuntu-20.04'
 
     - name: Get Sources
-      uses: actions/checkout@v3
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       with:
         fetch-depth: 0
 
@@ -98,7 +108,7 @@ jobs:
       run: make all deb
 
     - name: Upload Artifact
-      uses: actions/upload-artifact@v3.1.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with: 
         name: asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
         path: target/packages/asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
@@ -119,7 +129,7 @@ jobs:
 #          image: tonistiigi/binfmt:latest
 #          platforms: arm64
 #      - name: Get Sources
-#        uses: actions/checkout@v3
+#        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 #        with:
 #          fetch-depth: 0
 #      #- name: Clone Source
@@ -143,7 +153,7 @@ jobs:
 #          make all deb
 #
 #      - name: Upload Artifact
-#        uses: actions/upload-artifact@v3.1.1
+#        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
 #        with:
 #          name: asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
 #          path: target/packages/asmt_${{ env.REV }}-1${{ env.OS }}_${{ env.ARCH }}.deb
