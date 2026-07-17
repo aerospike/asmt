@@ -1365,29 +1365,27 @@ stat_segment(int shmid, as_segment_t** segment, int* error)
 
 	key = key & ~(0xff << AS_XMEM_NS_KEY_SHIFT);
 
-	if (key >= AS_XMEM_ARENA_KEY) {
-		if (primary) {
+	if (primary) {
+		if (key == 0) {
+			sp->type = TYPE_BASE;
+		}
+		else if (key == AS_XMEM_TREEX_KEY) {
+			sp->type = TYPE_TREEX;
+		}
+		else if (key >= AS_XMEM_ARENA_KEY) {
 			sp->type = TYPE_PRI_STAGE;
 		}
-		else if (secondary) {
+	}
+	else if (secondary) {
+		if (key == 0) {
+			sp->type = TYPE_META;
+		}
+		else if (key >= AS_XMEM_ARENA_KEY) {
 			sp->type = TYPE_SEC_STAGE;
 		}
 	}
-	else if (key == AS_XMEM_TREEX_KEY) {
-		if (primary) {
-			sp->type = TYPE_TREEX;
-		}
-	}
 	else {
-		if (primary) {
-			sp->type = TYPE_BASE ;
-		}
-		else if (secondary) {
-			sp->type = TYPE_META ;
-		}
-		else {
-			sp->type = TYPE_DAT_STAGE;
-		}
+		sp->type = TYPE_DAT_STAGE;
 	}
 
 	// Extract stage number from key.
@@ -5224,47 +5222,15 @@ validate_file_name(const char* pathname, as_file_t* fp)
 
 	key = key & ~(0xff << AS_XMEM_NS_KEY_SHIFT);
 
-	if (key >= AS_XMEM_ARENA_KEY) {
-		if (primary) {
-			fp->type = TYPE_PRI_STAGE;
-		} else if (secondary) {
-			fp->type = TYPE_SEC_STAGE;
-		}
-		else if (data) {
-			fp->type = TYPE_DAT_STAGE;
-		}
-		else {
-			// Not a valid Aerospike file type.
-			free(old_ptr);
-			old_ptr = NULL;
-			return false;
-		}
-	}
-	else if (key == AS_XMEM_TREEX_KEY) {
-		if (primary) {
-			fp->type = TYPE_TREEX;
-		}
-	}
-	else if (key > 0) {
-		if (data) {
-			fp->type = TYPE_DAT_STAGE;
-		}
-		else {
-			// Not a valid Aerospike file type.
-			free(old_ptr);
-			old_ptr = NULL;
-			return false;
-		}
-	}
-	else if (key == 0) {
-		if (primary) {
+	if (primary) {
+		if (key == 0) {
 			fp->type = TYPE_BASE;
 		}
-		else if (secondary) {
-			fp->type = TYPE_META;
+		else if (key == AS_XMEM_TREEX_KEY) {
+			fp->type = TYPE_TREEX;
 		}
-		else if (data) {
-			fp->type = TYPE_DAT_STAGE;
+		else if (key >= AS_XMEM_ARENA_KEY) {
+			fp->type = TYPE_PRI_STAGE;
 		}
 		else {
 			// Not a valid Aerospike file type.
@@ -5272,6 +5238,23 @@ validate_file_name(const char* pathname, as_file_t* fp)
 			old_ptr = NULL;
 			return false;
 		}
+	}
+	else if (secondary) {
+		if (key == 0) {
+			fp->type = TYPE_META;
+		}
+		else if (key >= AS_XMEM_ARENA_KEY) {
+			fp->type = TYPE_SEC_STAGE;
+		}
+		else {
+			// Not a valid Aerospike file type.
+			free(old_ptr);
+			old_ptr = NULL;
+			return false;
+		}
+	}
+	else if (data) {
+		fp->type = TYPE_DAT_STAGE;
 	}
 	else {
 		// Not a valid Aerospike file type.
