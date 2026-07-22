@@ -1375,6 +1375,12 @@ stat_segment(int shmid, as_segment_t** segment, int* error)
 		else if (key >= AS_XMEM_ARENA_KEY) {
 			sp->type = TYPE_PRI_STAGE;
 		}
+		else {
+			free(*segment);
+			*segment = NULL;
+			*error = ENOENT;
+			return false;
+		}
 	}
 	else if (secondary) {
 		if (key == 0) {
@@ -1382,6 +1388,12 @@ stat_segment(int shmid, as_segment_t** segment, int* error)
 		}
 		else if (key >= AS_XMEM_ARENA_KEY) {
 			sp->type = TYPE_SEC_STAGE;
+		}
+		else {
+			free(*segment);
+			*segment = NULL;
+			*error = ENOENT;
+			return false;
 		}
 	}
 	else {
