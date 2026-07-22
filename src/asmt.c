@@ -1376,6 +1376,7 @@ stat_segment(int shmid, as_segment_t** segment, int* error)
 			sp->type = TYPE_PRI_STAGE;
 		}
 		else {
+			// Not a valid Aerospike segment type.
 			free(*segment);
 			*segment = NULL;
 			*error = ENOENT;
@@ -1390,6 +1391,7 @@ stat_segment(int shmid, as_segment_t** segment, int* error)
 			sp->type = TYPE_SEC_STAGE;
 		}
 		else {
+			// Not a valid Aerospike segment type.
 			free(*segment);
 			*segment = NULL;
 			*error = ENOENT;
