@@ -65,7 +65,7 @@ run(const char* file_name, as_file_t* fp)
 
 static void
 expect_valid(const char* file_name, as_type want_type, uint32_t want_stage,
-		const char* desc)
+		uint32_t want_inst, const char* desc)
 {
 	as_file_t fp;
 	g_checks++;
@@ -86,6 +86,13 @@ expect_valid(const char* file_name, as_type want_type, uint32_t want_stage,
 	if (fp.stage != want_stage) {
 		printf("FAIL  %-28s %s: stage=0x%x, expected 0x%x\n", file_name, desc,
 				fp.stage, want_stage);
+		g_failures++;
+		return;
+	}
+
+	if (fp.inst != want_inst) {
+		printf("FAIL  %-28s %s: inst=%u, expected %u\n", file_name, desc,
+				fp.inst, want_inst);
 		g_failures++;
 		return;
 	}
@@ -115,23 +122,28 @@ main(void)
 	printf("validate_file_name() tests\n");
 
 	// Valid segments, instance 0, namespace id 1.
-	expect_valid("ae001000.dat",    TYPE_BASE,      0,     "primary base");
-	expect_valid("ae001001.dat",    TYPE_TREEX,     0,     "primary treex");
-	expect_valid("ae001100.dat",    TYPE_PRI_STAGE, 0x100, "primary arena stage");
-	expect_valid("a2001000.dat",    TYPE_META,      0,     "secondary meta");
-	expect_valid("a2001100.dat",    TYPE_SEC_STAGE, 0x100, "secondary arena stage");
-	expect_valid("ad001000.dat",    TYPE_DAT_STAGE, 0,     "data stage, key base 0");
-	expect_valid("ad001002.dat",    TYPE_DAT_STAGE, 2,     "data stage, key base 2");
-	expect_valid("ad001100.dat",    TYPE_DAT_STAGE, 0x100, "data stage, arena-range key");
+	expect_valid("ae001000.dat",    TYPE_BASE,      0,     0, "primary base");
+	expect_valid("ae001001.dat",    TYPE_TREEX,     0,     0, "primary treex");
+	expect_valid("ae001100.dat",    TYPE_PRI_STAGE, 0x100, 0, "primary arena stage");
+	expect_valid("a2001000.dat",    TYPE_META,      0,     0, "secondary meta");
+	expect_valid("a2001100.dat",    TYPE_SEC_STAGE, 0x100, 0, "secondary arena stage");
+	expect_valid("ad001000.dat",    TYPE_DAT_STAGE, 0,     0, "data stage, key base 0");
+	expect_valid("ad001002.dat",    TYPE_DAT_STAGE, 2,     0, "data stage, key base 2");
+	expect_valid("ad001100.dat",    TYPE_DAT_STAGE, 0x100, 0, "data stage, arena-range key");
 
 	// The regression: data segment whose key base == AS_XMEM_TREEX_KEY (1).
-	expect_valid("ad001001.dat",    TYPE_DAT_STAGE, 1,     "data stage, key base 1 (regression)");
+	expect_valid("ad001001.dat",    TYPE_DAT_STAGE, 1,     0, "data stage, key base 1 (regression)");
+
+	// Non-zero instance nibble (including MAX_INST, 15).
+	expect_valid("ae101001.dat",    TYPE_TREEX,     0,     1,  "primary treex, instance 1");
+	expect_valid("a2301100.dat",    TYPE_SEC_STAGE, 0x100, 3,  "secondary arena stage, instance 3");
+	expect_valid("adf01001.dat",    TYPE_DAT_STAGE, 1,     15, "data stage, key base 1, instance 15");
 
 	// Compressed extension must be accepted too.
-	expect_valid("ae001100.dat.gz", TYPE_PRI_STAGE, 0x100, "primary arena stage, .gz");
+	expect_valid("ae001100.dat.gz", TYPE_PRI_STAGE, 0x100, 0, "primary arena stage, .gz");
 
 	// Uppercase hex is accepted.
-	expect_valid("AE001001.dat",    TYPE_TREEX,     0,     "primary treex, uppercase");
+	expect_valid("AE001001.dat",    TYPE_TREEX,     0,     0, "primary treex, uppercase");
 
 	// Invalid: recognized class but unrecognized key base.
 	expect_invalid("ae001002.dat", "primary, key base 2 (not base/treex/arena)");
