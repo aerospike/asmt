@@ -58,6 +58,19 @@ asmt: target_dir $(ASMT_OBJECTS)
 	@echo "Linking $(ASMT_BINARY)"
 	$(CC) $(LDFLAGS) -o $(ASMT_BINARY) $(ASMT_OBJECTS) $(LIBRARIES)
 
+# Unit tests. The test includes asmt.c to reach its static functions, so it
+# only needs hardware.o (and the same libraries) to link.
+ASMT_TEST_BINARY = $(DIR_BIN)/asmt_test
+HARDWARE_OBJECT = $(DIR_OBJ)/src/hardware.o
+
+.PHONY: test
+test: target_dir $(HARDWARE_OBJECT)
+	@echo "Building $(ASMT_TEST_BINARY)"
+	$(CC) $(CFLAGS) -o $(ASMT_TEST_BINARY) $(INCLUDES) \
+		tests/test_validate_file_name.c $(HARDWARE_OBJECT) $(LIBRARIES)
+	@echo "Running $(ASMT_TEST_BINARY)"
+	./$(ASMT_TEST_BINARY)
+
 .PHONY: rpm
 rpm:
 	$(MAKE) -f pkg/Makefile.rpm

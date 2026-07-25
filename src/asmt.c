@@ -399,6 +399,8 @@ static bool analyze_backup(void);
 static bool check_dir(const char* pathname, bool is_write, bool create);
 static bool list_segments(as_segment_t** segments, uint32_t* n_segments,
 		int* error);
+static bool type_from_key_base(bool primary, bool secondary, key_t key_base,
+		as_type* type);
 static bool stat_segment(int shmid, as_segment_t** segment, int* error);
 static int qsort_compare_segments(const void* left, const void* right);
 static bool analyze_backup_candidate(as_segment_t* segments,
@@ -1273,6 +1275,45 @@ list_segments(as_segment_t** segments, uint32_t* n_segments, int* error)
 	return true;
 }
 
+// Determine the segment type from the segment class (primary / secondary /
+// data) and the key base. Returns false if the key base is not valid for the
+// class. Shared by stat_segment() and validate_file_name().
+
+static bool
+type_from_key_base(bool primary, bool secondary, key_t key_base, as_type* type)
+{
+	if (primary) {
+		if (key_base == 0) {
+			*type = TYPE_BASE;
+		}
+		else if (key_base == AS_XMEM_TREEX_KEY) {
+			*type = TYPE_TREEX;
+		}
+		else if (key_base >= AS_XMEM_ARENA_KEY) {
+			*type = TYPE_PRI_STAGE;
+		}
+		else {
+			return false;
+		}
+	}
+	else if (secondary) {
+		if (key_base == 0) {
+			*type = TYPE_META;
+		}
+		else if (key_base >= AS_XMEM_ARENA_KEY) {
+			*type = TYPE_SEC_STAGE;
+		}
+		else {
+			return false;
+		}
+	}
+	else {
+		*type = TYPE_DAT_STAGE;
+	}
+
+	return true;
+}
+
 // Get information about a single shared memory segment by shmid.
 // Validates whether a segment is an Aerospike database segment.
 
@@ -1365,29 +1406,12 @@ stat_segment(int shmid, as_segment_t** segment, int* error)
 
 	key = key & ~(0xff << AS_XMEM_NS_KEY_SHIFT);
 
-	if (key >= AS_XMEM_ARENA_KEY) {
-		if (primary) {
-			sp->type = TYPE_PRI_STAGE;
-		}
-		else if (secondary) {
-			sp->type = TYPE_SEC_STAGE;
-		}
-	}
-	else if (key == AS_XMEM_TREEX_KEY) {
-		if (primary) {
-			sp->type = TYPE_TREEX;
-		}
-	}
-	else {
-		if (primary) {
-			sp->type = TYPE_BASE ;
-		}
-		else if (secondary) {
-			sp->type = TYPE_META ;
-		}
-		else {
-			sp->type = TYPE_DAT_STAGE;
-		}
+	if (!type_from_key_base(primary, secondary, key, &sp->type)) {
+		// Not a valid Aerospike segment type.
+		free(*segment);
+		*segment = NULL;
+		*error = ENOENT;
+		return false;
 	}
 
 	// Extract stage number from key.
@@ -5224,56 +5248,7 @@ validate_file_name(const char* pathname, as_file_t* fp)
 
 	key = key & ~(0xff << AS_XMEM_NS_KEY_SHIFT);
 
-	if (key >= AS_XMEM_ARENA_KEY) {
-		if (primary) {
-			fp->type = TYPE_PRI_STAGE;
-		} else if (secondary) {
-			fp->type = TYPE_SEC_STAGE;
-		}
-		else if (data) {
-			fp->type = TYPE_DAT_STAGE;
-		}
-		else {
-			// Not a valid Aerospike file type.
-			free(old_ptr);
-			old_ptr = NULL;
-			return false;
-		}
-	}
-	else if (key == AS_XMEM_TREEX_KEY) {
-		if (primary) {
-			fp->type = TYPE_TREEX;
-		}
-	}
-	else if (key > 0) {
-		if (data) {
-			fp->type = TYPE_DAT_STAGE;
-		}
-		else {
-			// Not a valid Aerospike file type.
-			free(old_ptr);
-			old_ptr = NULL;
-			return false;
-		}
-	}
-	else if (key == 0) {
-		if (primary) {
-			fp->type = TYPE_BASE;
-		}
-		else if (secondary) {
-			fp->type = TYPE_META;
-		}
-		else if (data) {
-			fp->type = TYPE_DAT_STAGE;
-		}
-		else {
-			// Not a valid Aerospike file type.
-			free(old_ptr);
-			old_ptr = NULL;
-			return false;
-		}
-	}
-	else {
+	if (!type_from_key_base(primary, secondary, key, &fp->type)) {
 		// Not a valid Aerospike file type.
 		free(old_ptr);
 		old_ptr = NULL;
