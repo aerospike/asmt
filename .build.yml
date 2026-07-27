@@ -31,3 +31,4 @@ build:
     artifact:
       - target/bin/*
       - target/packages/*
+allow-rebuild: true
