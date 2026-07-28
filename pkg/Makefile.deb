@@ -6,9 +6,9 @@ export CL_BASE = $(DEB_BUILD_ROOT)/opt/aerospike
 export ETC_BASE = $(DEB_BUILD_ROOT)/etc/aerospike
 
 REV = $(shell build/version -v)
-# Build number = commits since the tag, +1 so the tagged release is 1. It goes in the
-# debian revision (with the OS), so successive master builds are orderable by apt/dpkg.
-BUILD_NUMBER = $(shell expr $$(build/version -r) + 1)
+# Build number from build/version -r (1-based: tagged release and dev builds are 1). It
+# goes in the debian revision (with the OS), so successive master builds are orderable.
+BUILD_NUMBER = $(shell build/version -r)
 OS = $(shell build/os_version)
 ARCH=$(shell uname -m)
 MANIFEST_DIR = manifest/TEMP

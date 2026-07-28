@@ -6,11 +6,12 @@
 #   build/version              -> master: x.y.z-n; dev branches: git describe with SHA
 #   build/version -v           -> master: x.y.z (bare);
 #                                 dev branches: git describe with SHA (same as default)
-#   build/version -r           -> master: build number n; dev branches: 1
+#   build/version -r           -> master: build number (tagged release = 1); dev: 1
 #
 # Consumed by pkg/Makefile.rpm and pkg/Makefile.deb: REV = `build/version -v`
 # (bare x.y.z; the rpm Makefile maps '-' to '_') for the package Version, and the
-# build number (`build/version -r` + 1) feeds the RPM Release / DEB revision.
+# build number `build/version -r` (1-based: tagged release and dev builds are 1)
+# feeds the RPM Release / DEB revision.
 #
 # Resolution rules:
 # - Always anchors on the bare x.y.z release tag via
@@ -24,7 +25,8 @@
 # - Dev branches: keep the full describe output (-<n>-g<sha>); build number is 1.
 #
 # build_number counts first-parent commits since the anchoring x.y.z tag (0 when
-# HEAD is exactly on the tag). Non-master branches always return 1.
+# HEAD is exactly on the tag). Non-master branches always return 1. The -r output
+# adds 1 on release lines so the tagged release is build number 1.
 # --first-parent requires git >= 2.20 (debian:10+; ubuntu-18.04/git 2.17 is below).
 #
 # Version is always derived from git tags via git-describe (through make print-REV).
@@ -208,7 +210,13 @@ if _is_release_branch "$branch"; then
 fi
 
 if [[ "$mode" == "build_only" ]]; then # -r
-    _build_number "$branch"
+    # 1-based build number so the tagged release is 1 (dev branches are already 1);
+    # feeds the RPM Release / DEB revision directly (no +1 in the Makefiles).
+    if [[ "$is_release_line" == true ]]; then
+        echo "$(( $(_build_number "$branch") + 1 ))"
+    else
+        _build_number "$branch"
+    fi
     exit 0
 fi
 
