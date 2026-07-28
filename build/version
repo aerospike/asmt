@@ -8,14 +8,16 @@
 #                                 dev branches: git describe with SHA (same as default)
 #   build/version -r           -> master: build number n; dev branches: 1
 #
-# Consumed by pkg/Makefile.deb and pkg/Makefile.rpm, which both call the default
-# mode for the package Version: field (the rpm Makefile maps '-' to '_').
+# Consumed by pkg/Makefile.rpm and pkg/Makefile.deb: REV = `build/version -v`
+# (bare x.y.z; the rpm Makefile maps '-' to '_') for the package Version, and the
+# build number (`build/version -r` + 1) feeds the RPM Release / DEB revision.
 #
 # Resolution rules:
 # - Always anchors on the bare x.y.z release tag via
-#   --match '[0-9][0-9]*.[0-9][0-9]*.[0-9][0-9]*'; if none is reachable it falls
-#   back to a v-prefixed tag, then to the short SHA. It never emits a leading 'v',
-#   which the Debian Version: field rejects ("does not start with digit").
+#   --match '[0-9]*.[0-9]*.[0-9]*'; if none is reachable the emitted version falls
+#   back to the short SHA (a v-prefixed tag is consulted only for the build-number
+#   anchor, never emitted). It never emits a leading 'v', which the Debian
+#   Version: field rejects ("does not start with digit").
 # - master: strip the describe --long suffix to x.y.z; default appends -n
 #   (omitted when n is 0, i.e. HEAD is exactly on the release tag, so official
 #   release builds stay bare x.y.z).
