@@ -23,10 +23,10 @@
 #
 # build_number counts first-parent commits since the anchoring x.y.z tag (0 when
 # HEAD is exactly on the tag). Non-master branches always return 1.
+# --first-parent requires git >= 2.20 (debian:10+; ubuntu-18.04/git 2.17 is below).
 #
-# A CI environment that pre-computes the version into /work/VERSION (with the
-# event payload in /work/EVENT) is honored when those files exist; otherwise the
-# git-describe path below runs.
+# Version is always derived from git tags via git-describe (through make print-REV).
+# No external pre-baked version files are consumed.
 
 # Fail on unset variables and pipeline errors. Intentionally omit -e so git
 # commands that legitimately fail (no matching tag) can fall through with || true.
@@ -92,28 +92,30 @@ _anchor_tag() {
     echo "$tag"
 }
 
-# Resolve the git ref for CI branch detection. Prefer GITHUB_REF when set,
-# then parse /work/EVENT. jq handles normal JSON; grep fallback tolerates
-# spaced payloads ("ref": "...") that the original compact-json grep missed.
-_ci_ref() {
-    if [[ -n "${GITHUB_REF:-}" ]]; then
-        echo "$GITHUB_REF"
-        return
+# Run git describe for version resolution. On failure (unsupported git, missing
+# tags in a shallow clone, etc.) warn to stderr before falling back to bare SHA
+# so mis-provisioned runners are visible instead of silently SHA-versioned packages.
+_describe_rev() {
+    local strip_suffix="${1:-false}"
+    local rev err
+
+    err="$(mktemp)"
+    rev="$(git describe --first-parent --tags --always --abbrev=9 --long \
+        --match "$TAG_MATCH" 2>"$err")" || rev=""
+    if [[ -z "$rev" ]]; then
+        echo "warning: git describe failed ($(tr -d '\n' < "$err")): falling back to commit SHA" >&2
+        rev="$(git rev-parse --short=9 HEAD)"
     fi
-    if [[ ! -f /work/EVENT ]]; then
-        return
+    rm -f "$err"
+
+    if [[ "$strip_suffix" == true ]]; then
+        rev="$(echo "$rev" | _strip_describe_suffix)"
     fi
-    if command -v jq >/dev/null 2>&1; then
-        jq -r '.ref // empty' /work/EVENT 2>/dev/null
-        return
-    fi
-    grep -oE '"ref"[[:space:]]*:[[:space:]]*"[^"]*"' /work/EVENT 2>/dev/null |
-        head -1 | sed -E 's/.*"([^"]*)".*/\1/'
+    echo "$rev"
 }
 
-# Determine branch when not in the /work/VERSION CI path. Tries, in order:
-# local branch name, GitHub/GitLab CI env vars (covers detached HEAD checkouts),
-# then the first remote branch containing HEAD (legacy fallback).
+# Determine branch name. Tries, in order: local branch name, common CI env vars
+# (covers detached HEAD checkouts), then the first remote branch containing HEAD.
 _resolve_branch() {
     local branch=""
 
@@ -163,19 +165,6 @@ _build_number() {
     fi
 }
 
-# CI-only: when /work/VERSION carries a describe string (x.y.z-n-g<sha>), use
-# the embedded n rather than recomputing from git. Prevents mismatches when the
-# CI checkout is shallow or tags are not fully fetched.
-_build_number_from_version() {
-    local ver="$1" branch="$2"
-
-    if [[ "$ver" =~ -([0-9]+)-g[0-9a-f]+$ ]]; then
-        echo "${BASH_REMATCH[1]}"
-        return
-    fi
-    _build_number "$branch"
-}
-
 # Shared release-line output for version_only and full modes on master.
 _emit_release_version() {
     local rev="$1" branch="$2" output_mode="$3"
@@ -186,12 +175,15 @@ _emit_release_version() {
         local bn
         bn="$(_build_number "$branch")"
         # Omit -n when n is 0 (HEAD exactly on the release tag).
-        [[ "$bn" == "0" ]] && echo "$rev" || echo "${rev}-${bn}"
+        if [[ "$bn" == "0" ]]; then
+            echo "$rev"
+        else
+            echo "${rev}-${bn}"
+        fi
         ;;
     esac
 }
 
-# Git-describe path requires a repo; the /work/VERSION CI path does not.
 _require_git_repo() {
     git rev-parse --git-dir >/dev/null 2>&1 || {
         echo "error: not a git repository" >&2
@@ -202,44 +194,9 @@ _require_git_repo() {
 # ---------------------------------------------------------------------------
 # Determine branch / release-line flag
 # ---------------------------------------------------------------------------
-is_release_line=false
-
-if [[ -f /work/VERSION ]]; then
-    # CI environment: read pre-computed version and derive branch from event payload.
-    rev="$(cat /work/VERSION)"
-    REF="$(_ci_ref)"
-    if [[ "$REF" == "refs/heads/master" ]]; then
-        is_release_line=true
-    fi
-
-    if [[ "$is_release_line" == true ]]; then
-        rev="$(echo "$rev" | _strip_describe_suffix)"
-        branch="master" # placeholder; only used for _build_number below
-    else
-        branch=""
-    fi
-
-    case "$mode" in
-    version_only) echo "$rev" ;;
-    build_only) _build_number_from_version "$rev" "${branch:-}" ;;
-    full)
-        if [[ "$is_release_line" == true ]]; then
-            # Re-read the raw VERSION for build-number extraction (before suffix strip).
-            bn="$(_build_number_from_version "$(cat /work/VERSION)" "${branch:-}")"
-            [[ "$bn" == "0" ]] && echo "$rev" || echo "${rev}-${bn}"
-        else
-            echo "$rev"
-        fi
-        ;;
-    esac
-    exit 0
-fi
-
-# ---------------------------------------------------------------------------
-# Git-describe path (local / standard CI without /work/VERSION)
-# ---------------------------------------------------------------------------
 _require_git_repo
 
+is_release_line=false
 branch="$(_resolve_branch)"
 
 if _is_release_branch "$branch"; then
@@ -253,17 +210,9 @@ fi
 
 # Anchor on the bare x.y.z tag only (never a leading-v ship tag).
 if [[ "$is_release_line" == true ]]; then
-    rev="$(git describe --first-parent --tags --always --abbrev=9 --long \
-        --match "$TAG_MATCH" 2>/dev/null | _strip_describe_suffix || true)"
-    if [[ -z "$rev" ]]; then
-        rev="$(git rev-parse --short=9 HEAD)"
-    fi
+    rev="$(_describe_rev true)"
     _emit_release_version "$rev" "$branch" "$mode"
 else
-    rev="$(git describe --first-parent --tags --always --abbrev=9 --long \
-        --match "$TAG_MATCH" 2>/dev/null || true)"
-    if [[ -z "$rev" ]]; then
-        rev="$(git rev-parse --short=9 HEAD)"
-    fi
+    rev="$(_describe_rev false)"
     echo "$rev"
 fi
