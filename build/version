@@ -13,9 +13,9 @@
 #
 # Resolution rules:
 # - Always anchors on the bare x.y.z release tag via
-#   --match '[0-9]*.[0-9]*.[0-9]*'; if none is reachable it falls back to a
-#   v-prefixed tag, then to the short SHA. It never emits a leading 'v', which
-#   the Debian Version: field rejects ("does not start with digit").
+#   --match '[0-9][0-9]*.[0-9][0-9]*.[0-9][0-9]*'; if none is reachable it falls
+#   back to a v-prefixed tag, then to the short SHA. It never emits a leading 'v',
+#   which the Debian Version: field rejects ("does not start with digit").
 # - master: strip the describe --long suffix to x.y.z; default appends -n
 #   (omitted when n is 0, i.e. HEAD is exactly on the release tag, so official
 #   release builds stay bare x.y.z).
@@ -28,11 +28,28 @@
 # event payload in /work/EVENT) is honored when those files exist; otherwise the
 # git-describe path below runs.
 
+# Fail on unset variables and pipeline errors. Intentionally omit -e so git
+# commands that legitimately fail (no matching tag) can fall through with || true.
+set -uo pipefail
+
 mode=full # full (default): x.y.z-n; version_only: x.y.z; build_only: n
 while [[ $# -gt 0 ]]; do
     case "$1" in
-    -v) mode=version_only ;;
-    -r) mode=build_only ;;
+    -v)
+        # Reject combining -v and -r.
+        if [[ "$mode" != "full" ]]; then
+            echo "Usage: $(basename "$0") [-v|-r]" >&2
+            exit 1
+        fi
+        mode=version_only
+        ;;
+    -r)
+        if [[ "$mode" != "full" ]]; then
+            echo "Usage: $(basename "$0") [-v|-r]" >&2
+            exit 1
+        fi
+        mode=build_only
+        ;;
     *)
         echo "Usage: $(basename "$0") [-v|-r]" >&2
         exit 1
@@ -41,7 +58,90 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Glob patterns for semver x.y.z tags. Require at least one digit per segment
+# ([0-9][0-9]* instead of [0-9]*) to avoid matching empty or degenerate tags.
+TAG_MATCH='[0-9][0-9]*.[0-9][0-9]*.[0-9][0-9]*'
+VTAG_MATCH="v${TAG_MATCH}"
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+# Centralizes the release-branch check (asmt uses master only; no hotfix/* lines).
+_is_release_branch() {
+    [[ "$1" == "master" ]]
+}
+
+# Strip git describe --long suffix (-<n>-g<sha>) leaving bare x.y.z.
+# Uses [0-9]+ (one or more digits) so we do not over-match on unusual tag names.
+_strip_describe_suffix() {
+    sed -E 's/-[0-9]+-g[0-9a-f]+$//'
+}
+
+# Shared tag lookup for _build_number. Most recent reachable x.y.z tag;
+# v-prefixed tags are used only for lookup, never emitted (Debian Version:
+# must start with a digit).
+_anchor_tag() {
+    local tag=""
+    tag=$(git describe --first-parent --tags --abbrev=0 \
+        --match "$TAG_MATCH" 2>/dev/null) || true
+    if [[ -z "$tag" ]]; then
+        tag=$(git describe --first-parent --tags --abbrev=0 \
+            --match "$VTAG_MATCH" 2>/dev/null) || true
+    fi
+    echo "$tag"
+}
+
+# Resolve the git ref for CI branch detection. Prefer GITHUB_REF when set,
+# then parse /work/EVENT. jq handles normal JSON; grep fallback tolerates
+# spaced payloads ("ref": "...") that the original compact-json grep missed.
+_ci_ref() {
+    if [[ -n "${GITHUB_REF:-}" ]]; then
+        echo "$GITHUB_REF"
+        return
+    fi
+    if [[ ! -f /work/EVENT ]]; then
+        return
+    fi
+    if command -v jq >/dev/null 2>&1; then
+        jq -r '.ref // empty' /work/EVENT 2>/dev/null
+        return
+    fi
+    grep -oE '"ref"[[:space:]]*:[[:space:]]*"[^"]*"' /work/EVENT 2>/dev/null |
+        head -1 | sed -E 's/.*"([^"]*)".*/\1/'
+}
+
+# Determine branch when not in the /work/VERSION CI path. Tries, in order:
+# local branch name, GitHub/GitLab CI env vars (covers detached HEAD checkouts),
+# then the first remote branch containing HEAD (legacy fallback).
+_resolve_branch() {
+    local branch=""
+
+    branch="$(git branch --show-current 2>/dev/null || true)"
+    if [[ -n "$branch" ]]; then
+        echo "$branch"
+        return
+    fi
+
+    if [[ -n "${GITHUB_HEAD_REF:-}" ]]; then
+        echo "$GITHUB_HEAD_REF"
+        return
+    fi
+    if [[ -n "${GITHUB_REF:-}" && "$GITHUB_REF" == refs/heads/* ]]; then
+        echo "${GITHUB_REF#refs/heads/}"
+        return
+    fi
+    if [[ -n "${CI_COMMIT_REF_NAME:-}" ]]; then
+        echo "$CI_COMMIT_REF_NAME"
+        return
+    fi
+
+    # grep -Ev '/HEAD ->' avoids matching symbolic HEAD refs; strip remote prefix.
+    branch="$(git branch -r --contains HEAD 2>/dev/null |
+        grep -Ev '/HEAD ->' | head -1 |
+        sed -e 's|^[^/]*/||' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' || true)"
+    echo "$branch"
+}
 
 # ---------------------------------------------------------------------------
 # Build-number calculation
@@ -49,19 +149,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _build_number() {
     local bn_branch="$1"
 
-    if [[ "$bn_branch" != "master" ]]; then
+    if ! _is_release_branch "$bn_branch"; then
         echo "1"
         return
     fi
 
     local base_tag
-    base_tag=$(git describe --first-parent --tags --abbrev=0 \
-        --match '[0-9]*.[0-9]*.[0-9]*' 2>/dev/null) || true
-    if [[ -z "$base_tag" ]]; then
-        base_tag=$(git describe --first-parent --tags --abbrev=0 \
-            --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null) || true
-    fi
-
+    base_tag="$(_anchor_tag)"
     if [[ -n "$base_tag" ]]; then
         git rev-list --first-parent --count "${base_tag}..HEAD"
     else
@@ -69,22 +163,57 @@ _build_number() {
     fi
 }
 
+# CI-only: when /work/VERSION carries a describe string (x.y.z-n-g<sha>), use
+# the embedded n rather than recomputing from git. Prevents mismatches when the
+# CI checkout is shallow or tags are not fully fetched.
+_build_number_from_version() {
+    local ver="$1" branch="$2"
+
+    if [[ "$ver" =~ -([0-9]+)-g[0-9a-f]+$ ]]; then
+        echo "${BASH_REMATCH[1]}"
+        return
+    fi
+    _build_number "$branch"
+}
+
+# Shared release-line output for version_only and full modes on master.
+_emit_release_version() {
+    local rev="$1" branch="$2" output_mode="$3"
+
+    case "$output_mode" in
+    version_only) echo "$rev" ;;
+    full)
+        local bn
+        bn="$(_build_number "$branch")"
+        # Omit -n when n is 0 (HEAD exactly on the release tag).
+        [[ "$bn" == "0" ]] && echo "$rev" || echo "${rev}-${bn}"
+        ;;
+    esac
+}
+
+# Git-describe path requires a repo; the /work/VERSION CI path does not.
+_require_git_repo() {
+    git rev-parse --git-dir >/dev/null 2>&1 || {
+        echo "error: not a git repository" >&2
+        exit 1
+    }
+}
+
 # ---------------------------------------------------------------------------
-# Determine branch
+# Determine branch / release-line flag
 # ---------------------------------------------------------------------------
 is_release_line=false
 
 if [[ -f /work/VERSION ]]; then
     # CI environment: read pre-computed version and derive branch from event payload.
     rev="$(cat /work/VERSION)"
-    if [[ -f /work/EVENT ]]; then
-        REF="$(grep -o '"ref":"[^"]*"' /work/EVENT 2>/dev/null | head -1 | cut -d'"' -f4)"
-        if [[ "$REF" == "refs/heads/master" ]]; then
-            is_release_line=true
-        fi
+    REF="$(_ci_ref)"
+    if [[ "$REF" == "refs/heads/master" ]]; then
+        is_release_line=true
     fi
+
     if [[ "$is_release_line" == true ]]; then
-        rev="$(echo "$rev" | sed 's/-[0-9]*-g[0-9a-f]*$//')"
+        rev="$(echo "$rev" | _strip_describe_suffix)"
         branch="master" # placeholder; only used for _build_number below
     else
         branch=""
@@ -92,10 +221,11 @@ if [[ -f /work/VERSION ]]; then
 
     case "$mode" in
     version_only) echo "$rev" ;;
-    build_only) _build_number "${branch:-}" ;;
+    build_only) _build_number_from_version "$rev" "${branch:-}" ;;
     full)
         if [[ "$is_release_line" == true ]]; then
-            bn="$(_build_number "${branch:-}")"
+            # Re-read the raw VERSION for build-number extraction (before suffix strip).
+            bn="$(_build_number_from_version "$(cat /work/VERSION)" "${branch:-}")"
             [[ "$bn" == "0" ]] && echo "$rev" || echo "${rev}-${bn}"
         else
             echo "$rev"
@@ -108,14 +238,11 @@ fi
 # ---------------------------------------------------------------------------
 # Git-describe path (local / standard CI without /work/VERSION)
 # ---------------------------------------------------------------------------
-branch="$(git branch --show-current)"
+_require_git_repo
 
-if [[ -z "$branch" ]]; then
-    branch="$(git branch -r --contains HEAD | grep -v HEAD | head -1 |
-        sed -e 's/origin\///' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-fi
+branch="$(_resolve_branch)"
 
-if [[ "$branch" == "master" ]]; then
+if _is_release_branch "$branch"; then
     is_release_line=true
 fi
 
@@ -127,21 +254,14 @@ fi
 # Anchor on the bare x.y.z tag only (never a leading-v ship tag).
 if [[ "$is_release_line" == true ]]; then
     rev="$(git describe --first-parent --tags --always --abbrev=9 --long \
-        --match '[0-9]*.[0-9]*.[0-9]*' 2>/dev/null |
-        sed 's/-[0-9]*-g[0-9a-f]*$//')"
+        --match "$TAG_MATCH" 2>/dev/null | _strip_describe_suffix || true)"
     if [[ -z "$rev" ]]; then
         rev="$(git rev-parse --short=9 HEAD)"
     fi
-    case "$mode" in
-    version_only) echo "$rev" ;;
-    full)
-        bn="$(_build_number "$branch")"
-        [[ "$bn" == "0" ]] && echo "$rev" || echo "${rev}-${bn}"
-        ;;
-    esac
+    _emit_release_version "$rev" "$branch" "$mode"
 else
     rev="$(git describe --first-parent --tags --always --abbrev=9 --long \
-        --match '[0-9]*.[0-9]*.[0-9]*' 2>/dev/null)"
+        --match "$TAG_MATCH" 2>/dev/null || true)"
     if [[ -z "$rev" ]]; then
         rev="$(git rev-parse --short=9 HEAD)"
     fi
