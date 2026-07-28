@@ -1,6 +1,6 @@
 Name: asmt
 Version: @VERSION@
-Release: 1%{?dist}
+Release: @RELEASE@%{?dist}
 Summary: The Aerospike Shared Memory Tool
 License: Apache 2.0 license
 Group: Application

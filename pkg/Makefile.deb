@@ -5,7 +5,10 @@ export DEB_BUILD_ROOT = $(DEB_SOURCE_ROOT)/BUILD
 export CL_BASE = $(DEB_BUILD_ROOT)/opt/aerospike
 export ETC_BASE = $(DEB_BUILD_ROOT)/etc/aerospike
 
-REV = $(shell build/version)
+REV = $(shell build/version -v)
+# Build number = commits since the tag, +1 so the tagged release is 1. It goes in the
+# debian revision (with the OS), so successive master builds are orderable by apt/dpkg.
+BUILD_NUMBER = $(shell expr $$(build/version -r) + 1)
 OS = $(shell build/os_version)
 ARCH=$(shell uname -m)
 MANIFEST_DIR = manifest/TEMP
@@ -44,10 +47,10 @@ dist:
 	ln -sf /opt/aerospike/bin/asmt $(DEB_BUILD_ROOT)/usr/bin/asmt
 
 
-	sed 's/@VERSION@/'$(REV)'/g' <pkg/deb/control >$(DEB_BUILD_ROOT)/DEBIAN/control
+	sed 's/@VERSION@/'$(REV)-$(BUILD_NUMBER)$(OS)'/g' <pkg/deb/control >$(DEB_BUILD_ROOT)/DEBIAN/control
 	sed -i 's/@ARCH@/'$(ARCH)'/g' $(DEB_BUILD_ROOT)/DEBIAN/control
 
-	fakeroot dpkg-deb -Z xz --build $(DEB_BUILD_ROOT) target/packages/asmt_$(REV)-1$(OS)_$(ARCH).deb
+	fakeroot dpkg-deb -Z xz --build $(DEB_BUILD_ROOT) target/packages/asmt_$(REV)-$(BUILD_NUMBER)$(OS)_$(ARCH).deb
 	rm -rf dist
 
 distclean:
