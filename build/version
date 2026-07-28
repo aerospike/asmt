@@ -58,9 +58,11 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
-# Glob patterns for semver x.y.z tags. Require at least one digit per segment
-# ([0-9][0-9]* instead of [0-9]*) to avoid matching empty or degenerate tags.
-TAG_MATCH='[0-9][0-9]*.[0-9][0-9]*.[0-9][0-9]*'
+# Glob patterns for semver x.y.z tags. git --match uses glob, NOT regex: a segment
+# must be [0-9]* (a leading digit, so 'staging.v1' is excluded). It must NOT be
+# [0-9][0-9]*, which in a glob means two-or-more digits and so never matches asmt's
+# single-digit segments (2.2.1, 1.0.0, ...), leaving every build SHA-versioned.
+TAG_MATCH='[0-9]*.[0-9]*.[0-9]*'
 VTAG_MATCH="v${TAG_MATCH}"
 
 # ---------------------------------------------------------------------------
