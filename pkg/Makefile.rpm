@@ -6,7 +6,11 @@ export CL_BASE = $(RPM_BUILD_ROOT)/opt/aerospike
 export ETC_BASE = $(RPM_BUILD_ROOT)/etc/aerospike
 
 MANIFEST_DIR = manifest/TEMP
-REV = $(shell build/version | sed 's/-/_/g')
+# Version (bare x.y.z on master; git-describe with SHA on dev branches). RPM Version
+# forbids '-', so map it to '_'. The build number (commits since the tag, +1 so the
+# tagged release is 1) is the Release.
+REV = $(shell build/version -v | sed 's/-/_/g')
+BUILD_NUMBER = $(shell expr $$(build/version -r) + 1)
 OS = $(shell build/os_version)
 ARCH = $(shell uname -m)
 
@@ -18,7 +22,7 @@ default: dist
 	mkdir -p $(RPM_BUILD_ROOT)/usr/bin
 
 	sed 's/@VERSION@/'$(REV)'/g' <pkg/rpm/asmt.spec >pkg/asmt_v.spec
-	sed -i 's/@RELEASE@/'$(OS)'/g' pkg/asmt_v.spec
+	sed -i 's/@RELEASE@/'$(BUILD_NUMBER)'/g' pkg/asmt_v.spec
 	sed -i 's/@ARCH@/'$(ARCH)'/g' pkg/asmt_v.spec
 
 	rpmbuild --noclean -bb -vv --define "dist .$(OS)" --buildroot $(RPM_BUILD_ROOT) pkg/asmt_v.spec
